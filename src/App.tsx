@@ -268,7 +268,7 @@ function App() {
       <p className="save-note">Ответы автоматически сохраняются в рамках текущей вкладки; на сервер отправляются при переходе к следующему вопросу.</p>
     </section>}
     {screen === 'done' && <section className="done panel"><div className="success-icon">✓</div><div className="eyebrow">ИССЛЕДОВАНИЕ ЗАВЕРШЕНО</div><h1>Спасибо за ваше<br/><em>время и честность.</em></h1><p className="lead">Ваши ответы помогут лучше понять реальные потребности и найти идеи полезных решений.</p><p className="footnote">Анкета отправлена. Вы можете закрыть это окно.</p></section>}
-    <footer>© 2026 WOMEN'S NEEDS RESEARCH <span>Создано для изучения реальных потребностей</span></footer>
+    <footer>© 2026 WOMEN'S NEEDS RESEARCH <span>Разработано by <strong>kRISJEEY &amp; Domentos</strong></span><span>Создано для изучения реальных потребностей</span></footer>
   </main>
 }
 
