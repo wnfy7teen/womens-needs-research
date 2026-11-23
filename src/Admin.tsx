@@ -23,7 +23,13 @@ export default function Admin() {
   const [email, setEmail] = useState('usdtuser1@proton.me')
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => {
+    const params = new URLSearchParams(window.location.hash.slice(1))
+    const code = params.get('error_code')
+    if (code === 'otp_expired') return 'Ссылка для входа уже недействительна или была открыта ранее. Запроси новую ссылку и открой её один раз.'
+    if (params.get('error')) return params.get('error_description') || 'Не удалось выполнить вход. Запроси новую ссылку.'
+    return ''
+  })
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [questions, setQuestions] = useState<Question[]>([])
   const [sections, setSections] = useState<Section[]>([])
@@ -111,7 +117,7 @@ export default function Admin() {
     e.preventDefault(); setBusy(true); setError('')
     const { error: authError } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin + '/admin' }
+      options: { emailRedirectTo: 'https://womens-needs-research.csgoidelka.workers.dev/admin' }
     })
     setBusy(false)
     if (authError) setError(authError.message)
