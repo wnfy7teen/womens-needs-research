@@ -10,6 +10,57 @@ type Question = {
 type Section = { id: string; slug: string; title: string; description?: string; position: number }
 type Survey = { sections: Section[]; questions: Question[]; consentVersion: string }
 type Answer = string | string[] | number
+
+type CurrencyInfo = { code: string; name: string; rate: number }
+const COUNTRY_CURRENCIES: Record<string, CurrencyInfo> = {}
+const currencyGroups: Array<[string[], CurrencyInfo]> = [
+  [['россия','russia'], {code:'RUB',name:'российских рублях',rate:90.34}],
+  [['нидерланды','netherlands','германия','germany','франция','france','италия','italy','испания','spain','бельгия','belgium','португалия','portugal','австрия','austria','ирландия','ireland'], {code:'EUR',name:'евро',rate:1}],
+  [['сша','соединенные штаты','united states','usa'], {code:'USD',name:'долларах США',rate:1.10}],
+  [['великобритания','united kingdom','uk'], {code:'GBP',name:'фунтах стерлингов',rate:0.833}],
+  [['швейцария','switzerland'], {code:'CHF',name:'швейцарских франках',rate:0.923}],
+  [['польша','poland'], {code:'PLN',name:'польских злотых',rate:4.404}],
+  [['украина','україна','ukraine'], {code:'UAH',name:'украинских гривнах',rate:47.5}],
+  [['казахстан','kazakhstan'], {code:'KZT',name:'казахстанских тенге',rate:550}],
+  [['турция','türkiye','turkey'], {code:'TRY',name:'турецких лирах',rate:55.4}],
+  [['китай','china'], {code:'CNY',name:'китайских юанях',rate:7.33}],
+  [['канада','canada'], {code:'CAD',name:'канадских долларах',rate:1.57}],
+  [['австралия','australia'], {code:'AUD',name:'австралийских долларах',rate:1.63}],
+  [['беларусь','белоруссия','belarus'], {code:'BYN',name:'белорусских рублях',rate:3}],
+  [['грузия','georgia'], {code:'GEL',name:'грузинских лари',rate:3}],
+  [['армения','armenia'], {code:'AMD',name:'армянских драмах',rate:430}],
+  [['япония','japan'], {code:'JPY',name:'японских иенах',rate:175}],
+  [['чехия','czechia','czech republic'], {code:'CZK',name:'чешских кронах',rate:24.4}],
+  [['швеция','sweden'], {code:'SEK',name:'шведских кронах',rate:11.1}],
+  [['норвегия','norway'], {code:'NOK',name:'норвежских кронах',rate:10.6}],
+  [['дания','denmark'], {code:'DKK',name:'датских кронах',rate:7.47}],
+  [['венгрия','hungary'], {code:'HUF',name:'венгерских форинтах',rate:365}],
+  [['румыния','romania'], {code:'RON',name:'румынских леях',rate:5.35}],
+  [['индия','india'], {code:'INR',name:'индийских рупиях',rate:103}],
+  [['бразилия','brazil'], {code:'BRL',name:'бразильских реалах',rate:6.28}],
+  [['оаэ','united arab emirates','uae'], {code:'AED',name:'дирхамах ОАЭ',rate:4.04}],
+  [['сингапур','singapore'], {code:'SGD',name:'сингапурских долларах',rate:1.42}],
+  [['таиланд','thailand'], {code:'THB',name:'тайских батах',rate:37.2}],
+  [['юар','south africa'], {code:'ZAR',name:'южноафриканских рэндах',rate:18.6}],
+]
+for (const [aliases, info] of currencyGroups) for (const alias of aliases) COUNTRY_CURRENCIES[alias] = info
+function getCurrency(country: string): CurrencyInfo {
+  const normalized = country.trim().toLocaleLowerCase('ru').replace(/[.,]/g, '').replace(/\s+/g, ' ')
+  return COUNTRY_CURRENCIES[normalized] ?? {code:'EUR',name:'евро',rate:1}
+}
+function formatLocalAmount(eurAmount: number, currency: CurrencyInfo): string {
+  const raw = eurAmount * currency.rate
+  const step = raw >= 1000 ? 100 : raw >= 100 ? 10 : raw >= 20 ? 5 : 1
+  return new Intl.NumberFormat('ru-RU', {style:'currency',currency:currency.code,maximumFractionDigits:0}).format(Math.round(raw / step) * step)
+}
+function localPriceLabel(value: string, currency: CurrencyInfo): string {
+  if (value === 'до_5') return 'До ' + formatLocalAmount(5,currency)
+  if (value === '5_10') return formatLocalAmount(5,currency) + ' – ' + formatLocalAmount(10,currency)
+  if (value === '11_20') return formatLocalAmount(10,currency) + ' – ' + formatLocalAmount(20,currency)
+  if (value === '21_40') return formatLocalAmount(20,currency) + ' – ' + formatLocalAmount(40,currency)
+  if (value === 'более_40') return 'Более ' + formatLocalAmount(40,currency)
+  return value
+}
 type SavedSession = {
   answers: Record<string, Answer>
   submissionId: string
@@ -208,9 +259,9 @@ function App() {
       <div className="section-meta"><span className="section-number">0{sectionIndex+1}</span><div><h2>{currentSection.title}</h2><p>{currentSection.description}</p></div></div>
       <article className="question-card">
         <div className="question-meta">ВОПРОС {survey.questions.findIndex(q=>q.id===currentQuestion.id)+1} ИЗ {totalQuestions} {currentQuestion.is_required && <span>· ОБЯЗАТЕЛЬНЫЙ</span>}</div>
-        <h3>{currentQuestion.prompt}</h3>
+        <h3>{currentQuestion.slug === 'price_range' ? 'Какую сумму в месяц вы считали бы приемлемой за продукт, который регулярно решает важную для вас проблему? (' + getCurrency(String(answers[survey.questions.find(q=>q.slug==='country')?.id ?? ''] ?? '')).name + ')' : currentQuestion.prompt}</h3>
         {currentQuestion.help_text && <p className="muted">{currentQuestion.help_text}</p>}
-        <AnswerInput question={currentQuestion} value={answers[currentQuestion.id]} onChange={v=>setAnswer(currentQuestion.id,v)}/>
+        <AnswerInput question={currentQuestion} value={answers[currentQuestion.id]} country={String(answers[survey.questions.find(q=>q.slug==='country')?.id ?? ''] ?? '')} onChange={v=>setAnswer(currentQuestion.id,v)}/>
       </article>
       {error && <p className="error">{error}</p>}
       <div className="nav-actions"><button className="secondary" onClick={back} disabled={busy}>Назад</button><button className="primary" onClick={next} disabled={busy}>{busy?'Сохраняем…':sectionIndex===sections.length-1 && questionIndex===sectionQuestions.length-1?'Завершить':'Продолжить'} <span>→</span></button></div>
@@ -221,7 +272,7 @@ function App() {
   </main>
 }
 
-function AnswerInput({question, value, onChange}:{question:Question,value:Answer|undefined,onChange:(v:Answer)=>void}) {
+function AnswerInput({question, value, country, onChange}:{question:Question,value:Answer|undefined,country:string,onChange:(v:Answer)=>void}) {
   const type = question.question_type
   if (type === 'textarea' || type === 'text') return <textarea rows={type==='text'?2:4} maxLength={4000} placeholder="Ваш ответ…" value={typeof value==='string'?value:''} onChange={e=>onChange(e.target.value)}/>
   if (type === 'number') return <input type="number" value={typeof value==='number'?value:''} onChange={e=>onChange(e.target.value === '' ? '' : Number(e.target.value))}/>
@@ -234,7 +285,7 @@ function AnswerInput({question, value, onChange}:{question:Question,value:Answer
     return <div className="options">{question.options.map(o=><label className={`option ${selected.includes(o.value)?'active':''}`} key={o.id}><input type="checkbox" checked={selected.includes(o.value)} onChange={e=>onChange(e.target.checked?[...selected,o.value]:selected.filter(v=>v!==o.value))}/><span>{o.label}</span><i>{selected.includes(o.value)?'✓':''}</i></label>)}</div>
   }
   if (type === 'country') return <input className="text-input" placeholder="Например, Нидерланды" value={typeof value==='string'?value:''} onChange={e=>onChange(e.target.value)}/>
-  return <div className="options">{question.options.map(o=><label className={`option ${value===o.value?'active':''}`} key={o.id}><input type="radio" name={question.id} checked={value===o.value} onChange={()=>onChange(o.value)}/><span>{o.label}</span><i>{value===o.value?'✓':''}</i></label>)}</div>
+  return <div className="options">{question.options.map(o=><label className={`option ${value===o.value?'active':''}`} key={o.id}><input type="radio" name={question.id} checked={value===o.value} onChange={()=>onChange(o.value)}/><span>{question.slug === 'price_range' ? localPriceLabel(o.value,getCurrency(country)) : o.label}</span><i>{value===o.value?'✓':''}</i></label>)}</div>
 }
 
 export default App
