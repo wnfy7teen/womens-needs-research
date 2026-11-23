@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient, type Session } from '@supabase/supabase-js'
+import JSZip from 'jszip'
 
 const supabase = createClient(
   'https://mqxuhbbthshjuetbjxbh.supabase.co',
@@ -38,6 +39,7 @@ export default function Admin() {
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
+  const [exportingSubmission, setExportingSubmission] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthReady(true) })
@@ -142,38 +144,113 @@ export default function Admin() {
     const link = document.createElement('a'); link.href = url; link.download = 'wnr-responses.csv'; link.click(); URL.revokeObjectURL(url)
   }
 
-  function exportSubmissionCsv(submission: Submission) {
+  async function exportSubmissionImages(submission: Submission) {
     const submissionAnswers = answers
       .filter(answer => answer.submission_id === submission.id)
       .sort((left, right) => (questionById.get(left.question_id)?.position ?? 0) - (questionById.get(right.question_id)?.position ?? 0))
-    const rows = [
-      ['WNR — Ответы прохождения'],
-      ['ID прохождения', submission.id],
-      ['Статус', submission.status],
-      ['Язык', submission.locale],
-      ['Начато', submission.started_at || submission.created_at],
-      ['Завершено', submission.completed_at ?? ''],
-      [],
-      ['Раздел', 'Вопрос', 'Ответ', 'Дата ответа'],
-      ...submissionAnswers.map(answer => {
-        const question = questionById.get(answer.question_id)
-        return [
-          sectionById.get(question?.section_id ?? '') ?? 'Раздел не найден',
-          question?.prompt ?? answer.question_id,
-          answerLabel(answer.answer),
-          answer.created_at
-        ]
+    if (!submissionAnswers.length) return
+    setExportingSubmission(submission.id)
+    try {
+      const zip = new JSZip()
+      const width = 1200
+      const height = 1600
+      const escapeXml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+      const wrap = (value: string, limit: number) => {
+        const words = value.split(/\s+/)
+        const lines: string[] = []
+        let line = ''
+        for (const word of words) {
+          const next = line ? line + ' ' + word : word
+          if (next.length > limit && line) { lines.push(line); line = word }
+          else line = next
+        }
+        if (line) lines.push(line)
+        return lines.length ? lines : ['—']
+      }
+      const groups = sections.map(section => ({
+        section,
+        items: submissionAnswers.filter(answer => questionById.get(answer.question_id)?.section_id === section.id)
+      })).filter(group => group.items.length)
+      const ungrouped = submissionAnswers.filter(answer => !sections.some(section => section.id === questionById.get(answer.question_id)?.section_id))
+      if (ungrouped.length) groups.push({ section: { id: 'other', title: 'Другие ответы', position: 999 }, items: ungrouped })
+      const pages = groups.flatMap(group => {
+        const chunks: Answer[][] = []
+        for (let index = 0; index < group.items.length; index += 4) chunks.push(group.items.slice(index, index + 4))
+        return chunks.map(items => ({ title: group.section.title, items }))
       })
-    ]
-    const csv = rows.map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n')
-    const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `wnr-${submission.id.slice(0, 8)}-answers.csv`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      const status = submission.status === 'completed' ? 'Завершена' : submission.status === 'in_progress' ? 'В процессе' : 'Прервана'
+      const created = dateLabel(submission.started_at || submission.created_at)
+      const completed = dateLabel(submission.completed_at)
+      for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+        const page = pages[pageIndex]
+        let y = 390
+        const cardMarkup = page.items.map((answer, index) => {
+          const question = questionById.get(answer.question_id)
+          const questionLines = wrap(question?.prompt ?? 'Вопрос удалён', 65)
+          const answerLines = wrap(answerLabel(answer.answer), 68)
+          const cardHeight = 78 + questionLines.length * 31 + answerLines.length * 29
+          const top = y
+          y += cardHeight + 18
+          const qText = questionLines.map((line, lineIndex) => `<text x="104" y="${top + 89 + lineIndex * 31}" class="question">${escapeXml(line)}</text>`).join('')
+          const aStart = top + 112 + questionLines.length * 31
+          const aText = answerLines.map((line, lineIndex) => `<text x="104" y="${aStart + lineIndex * 29}" class="answer">${escapeXml(line)}</text>`).join('')
+          return `<rect x="72" y="${top}" width="1056" height="${cardHeight}" rx="22" fill="#ffffff" stroke="#e6e8eb"/><text x="104" y="${top + 48}" class="number">${String(pageIndex * 4 + index + 1).padStart(2, '0')} / ${submissionAnswers.length}</text>${qText}<line x1="104" y1="${aStart - 24}" x2="1096" y2="${aStart - 24}" stroke="#eceef0"/>${aText}`
+        }).join('')
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+          <rect width="1200" height="1600" fill="#f5f5f7"/>
+          <text x="72" y="92" font-family="Arial,sans-serif" font-size="24" font-weight="700" letter-spacing="4" fill="#003d55">WNR  /  WOMEN'S NEEDS RESEARCH</text>
+          <text x="72" y="188" font-family="Arial,sans-serif" font-size="58" font-weight="700" fill="#1d1d1f">Ответы участницы</text>
+          <text x="72" y="238" font-family="Arial,sans-serif" font-size="23" fill="#6e6e73">Индивидуальный отчёт исследования</text>
+          <rect x="72" y="278" width="1056" height="78" rx="16" fill="#ffffff" stroke="#e6e8eb"/>
+          <text x="100" y="311" font-family="Arial,sans-serif" font-size="15" fill="#6e6e73">СТАТУС  ·  ${escapeXml(status)}</text>
+          <text x="100" y="339" font-family="Arial,sans-serif" font-size="15" fill="#6e6e73">НАЧАТО  ·  ${escapeXml(created)}     ЗАВЕРШЕНО  ·  ${escapeXml(completed)}</text>
+          <text x="72" y="390" font-family="Arial,sans-serif" font-size="18" font-weight="700" fill="#0071e3">${escapeXml(page.title.toLocaleUpperCase('ru'))}</text>
+          <style>
+            .number{font:600 14px Arial,sans-serif;fill:#0071e3}
+            .question{font:600 23px Arial,sans-serif;fill:#1d1d1f}
+            .answer{font:20px Arial,sans-serif;fill:#424245}
+          </style>
+          ${cardMarkup}
+          <line x1="72" y1="1500" x2="1128" y2="1500" stroke="#dfe1e5"/>
+          <text x="72" y="1540" font-family="Arial,sans-serif" font-size="15" fill="#6e6e73">WNR · PRIVATE RESEARCH REPORT</text>
+          <text x="1128" y="1540" text-anchor="end" font-family="Arial,sans-serif" font-size="15" fill="#6e6e73">${pageIndex + 1} / ${pages.length}  ·  ID ${escapeXml(submission.id.slice(0, 8))}</text>
+        </svg>`
+        const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+        const svgUrl = URL.createObjectURL(svgBlob)
+        try {
+          const image = new Image()
+          image.src = svgUrl
+          await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve()
+            image.onerror = () => reject(new Error('Не удалось подготовить страницу отчёта'))
+          })
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const context = canvas.getContext('2d')
+          if (!context) throw new Error('Canvas недоступен')
+          context.drawImage(image, 0, 0, width, height)
+          const png = await new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Не удалось создать PNG')), 'image/png'))
+          zip.file(`WNR-${String(pageIndex + 1).padStart(2, '0')}-${page.title.replace(/[^\p{L}\p{N}-]+/gu, '-')}.png`, png)
+        } finally {
+          URL.revokeObjectURL(svgUrl)
+        }
+      }
+      const archive = await zip.generateAsync({ type: 'blob' })
+      const archiveUrl = URL.createObjectURL(archive)
+      const link = document.createElement('a')
+      link.href = archiveUrl
+      link.download = `WNR-${submission.id.slice(0, 8)}-report.zip`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(archiveUrl), 1500)
+    } catch (exportError) {
+      console.error(exportError)
+      setError(exportError instanceof Error ? exportError.message : 'Не удалось сформировать изображения')
+    } finally {
+      setExportingSubmission(null)
+    }
   }
 
   if (!authReady) return <main className="admin-page"><div className="admin-loading">Загружаем панель…</div></main>
@@ -206,9 +283,9 @@ export default function Admin() {
     <section className="admin-grid">
       <div className="admin-panel admin-list-panel"><div className="admin-panel-head"><div><h2>Прохождения</h2><p>Последние отправки и текущие сессии</p></div><span>{filtered.length}</span></div>
         <div className="admin-filters"><input placeholder="Найти по ID…" value={search} onChange={e=>setSearch(e.target.value)}/><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Все статусы</option><option value="completed">Завершённые</option><option value="in_progress">В процессе</option><option value="abandoned">Прерванные</option></select></div>
-        <div className="admin-submissions">{filtered.map(s=><div key={s.id} className="submission-row"><button className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button><button className="submission-download" onClick={()=>exportSubmissionCsv(s)} title="Скачать ответы этой анкеты" aria-label="Скачать ответы этой анкеты" disabled={!answers.some(a=>a.submission_id===s.id)}>↓</button></div>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
+        <div className="admin-submissions">{filtered.map(s=><div key={s.id} className="submission-row"><button className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button><button className="submission-download" onClick={()=>void exportSubmissionImages(s)} title="Скачать визуальный отчёт PNG" aria-label="Скачать визуальный отчёт PNG" disabled={!answers.some(a=>a.submission_id===s.id) || exportingSubmission===s.id}>{exportingSubmission===s.id?'…':'↓'}</button></div>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
       </div>
-      <div className="admin-panel admin-detail-panel"><div className="admin-panel-head"><div><h2>{selectedSubmission ? 'Ответы анкеты' : 'Детали прохождения'}</h2><p>{selectedSubmission ? selectedSubmission.id : 'Выбери прохождение слева'}</p></div>{selectedSubmission && <button className="detail-export" onClick={()=>exportSubmissionCsv(selectedSubmission)} disabled={!selectedAnswers.length}>Скачать ответы ↓</button>}</div>
+      <div className="admin-panel admin-detail-panel"><div className="admin-panel-head"><div><h2>{selectedSubmission ? 'Ответы анкеты' : 'Детали прохождения'}</h2><p>{selectedSubmission ? selectedSubmission.id : 'Выбери прохождение слева'}</p></div>{selectedSubmission && <button className="detail-export" onClick={()=>void exportSubmissionImages(selectedSubmission)} disabled={!selectedAnswers.length || exportingSubmission===selectedSubmission.id}>{exportingSubmission===selectedSubmission.id?'Готовим изображения…':'Скачать отчёт PNG ↓'}</button>}</div>
         {selectedSubmission ? <><div className="detail-meta"><span>{selectedSubmission.status}</span><span>Начата: {dateLabel(selectedSubmission.started_at || selectedSubmission.created_at)}</span><span>Завершена: {dateLabel(selectedSubmission.completed_at)}</span></div><div className="admin-answers">{selectedAnswers.map(a=>{const q=questionById.get(a.question_id);return <article key={a.question_id}><small>{sectionById.get(q?.section_id ?? '') ?? 'ВОПРОС'} · {q?.slug ?? ''}</small><h3>{q?.prompt ?? 'Вопрос удалён'}</h3><p>{answerLabel(a.answer)}</p></article>})}{!selectedAnswers.length && <p className="admin-empty">Ответов пока нет</p>}</div></> : <div className="admin-placeholder">Выбери анкету, чтобы посмотреть её ответы и статус.</div>}
       </div>
     </section>
