@@ -77,8 +77,8 @@ function App() {
       if (params.button_color) root.style.setProperty('--tg-button-color', params.button_color)
       root.dataset.telegramColorScheme = webApp.colorScheme ?? 'light'
     }
-    webApp.ready()
-    webApp.expand()
+    webApp.ready?.()
+    webApp.expand?.()
     applyTelegramTheme()
     webApp.onEvent?.('themeChanged', applyTelegramTheme)
     return () => webApp.offEvent?.('themeChanged', applyTelegramTheme)
