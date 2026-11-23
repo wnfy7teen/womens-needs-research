@@ -407,3 +407,19 @@ footer{padding-bottom:4px}
 .admin-page .admin-login label{font-size:12px}
 .admin-page .admin-login input{font-size:14px}
 .admin-page .admin-error{font-size:13px;line-height:1.55}
+
+/* Per-submission response export */
+.submission-row{display:flex;align-items:center;gap:6px;border-top:1px solid #f0f0f2}
+.submission-row .admin-submission{border-top:0;flex:1;min-width:0}
+.submission-download,.detail-export{
+  flex:none;border:1px solid #d2d2d7;border-radius:8px;background:#fff;
+  color:#0071e3;cursor:pointer;transition:background .15s,border-color .15s;
+}
+.submission-download{width:32px;height:32px;font-size:17px;line-height:1}
+.submission-download:hover,.detail-export:hover{background:#f5f8fc;border-color:#a9c9ed}
+.submission-download:disabled,.detail-export:disabled{opacity:.35;cursor:not-allowed}
+.detail-export{padding:8px 11px;font-size:12px;white-space:nowrap}
+@media(max-width:600px){
+  .submission-download{width:30px;height:30px}
+  .detail-export{font-size:11px;padding:7px 9px}
+}
