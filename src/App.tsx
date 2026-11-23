@@ -239,7 +239,14 @@ function App() {
   }
 
   useEffect(() => {
-    const backButton = window.Telegram?.WebApp?.BackButton
+    const backButton = (window.Telegram?.WebApp as unknown as {
+      BackButton?: {
+        show?: () => void
+        hide?: () => void
+        onClick?: (callback: () => void) => void
+        offClick?: (callback: () => void) => void
+      }
+    } | undefined)?.BackButton
     if (!backButton) return
     const handleBack = () => { void back() }
     if (screen === 'survey') {
