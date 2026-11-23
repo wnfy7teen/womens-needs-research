@@ -12,7 +12,7 @@ type Survey = { sections: Section[]; questions: Question[]; consentVersion: stri
 type Answer = string | string[] | number
 
 const API = import.meta.env.VITE_SURVEY_FUNCTION_URL as string
-const headers = { 'Content-Type': ' application/json' }
+const headers = { 'Content-Type': 'application/json' }
 
 async function request(path: string, body?: unknown) {
   const response = await fetch(API, {
