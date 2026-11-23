@@ -302,7 +302,7 @@ function AnswerInput({question, value, country, onChange}:{question:Question,val
   }
   if (type === 'multiple_choice') {
     const selected = Array.isArray(value)?value:[]
-    return <div className="options">{question.options.map(o=><label className={`option ${selected.includes(o.value)?'active':''}`} key={o.id}><input type="checkbox" checked={selected.includes(o.value)} onChange={e=>onChange(e.target.checked?[...selected,o.value]:selected.filter(v=>v!==o.value))}/><span>{o.label}</span><i>{selected.includes(o.value)?'✓':''}</i></label>)}</div>
+    return <div className="options">{question.options.map(o=><label className={`option ${selected.includes(o.value)?'active':''}`} key={o.id}><input type="checkbox" checked={selected.includes(o.value)} onChange={e=>onChange(e.target.checked?[...selected,o.value]:selected.filter(v=>v!==o.value))}/><span>{o.label.replace(/_/g, ' ')}</span><i>{selected.includes(o.value)?'✓':''}</i></label>)}</div>
   }
   if (type === 'country') return <input className="text-input" placeholder="Например, Нидерланды" value={typeof value==='string'?value:''} onChange={e=>onChange(e.target.value)}/>
   return <div className="options">{question.options.map(o=><label className={`option ${value===o.value?'active':''}`} key={o.id}><input type="radio" name={question.id} checked={value===o.value} onChange={()=>onChange(o.value)}/><span>{question.slug === 'price_range' ? localPriceLabel(o.value,getCurrency(country)) : o.label}</span><i>{value===o.value?'✓':''}</i></label>)}</div>
