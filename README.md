@@ -38,6 +38,8 @@ Function: `survey-public`
 GET `/functions/v1/survey-public` returns sections and questions.
 POST actions: `start`, `save`, `complete`.
 
+The frontend loads the official Telegram WebApp bridge, calls `ready()` and `expand()`, and reacts to Telegram theme changes. In-progress answers and the current question are kept in `sessionStorage` for the lifetime of the browser tab, so a page reload in the same tab can restore the session. They are not persisted across a new tab or browser session.
+
 ## Privacy and security notes
 
 - Do not add Telegram user IDs to survey records.
