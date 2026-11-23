@@ -77,38 +77,6 @@ footer{padding-bottom:4px}
 @supports(height:100dvh){
   body,.shell{min-height:100dvh}
 }
-html[data-telegram-color-scheme="dark"]{
-  color-scheme:dark;
-  --tg-bg-color:#172126;
-  --tg-text-color:#edf4f4;
-  --tg-hint-color:#9aaeb2;
-}
-html[data-telegram-color-scheme="dark"] body{background:var(--tg-bg-color);color:var(--tg-text-color)}
-html[data-telegram-color-scheme="dark"] .panel,
-html[data-telegram-color-scheme="dark"] .question-card{
-  background:#202d33;border-color:#34444a;box-shadow:0 12px 40px #00000020;
-}
-html[data-telegram-color-scheme="dark"] .lead,
-html[data-telegram-color-scheme="dark"] .consent,
-html[data-telegram-color-scheme="dark"] .option{color:#c2d0d2}
-html[data-telegram-color-scheme="dark"] .option{background:#202d33;border-color:#3b4b50}
-html[data-telegram-color-scheme="dark"] .option.active{background:#29464b;border-color:#6d9fa4;color:#f1f7f7}
-html[data-telegram-color-scheme="dark"] textarea,
-html[data-telegram-color-scheme="dark"] .text-input,
-html[data-telegram-color-scheme="dark"] .question-card input[type=number]{
-  background:#172126;border-color:#405158;color:#f2f7f7;
-}
-html[data-telegram-color-scheme="dark"] .secondary{background:#34444a;color:#edf4f4}
-html[data-telegram-color-scheme="dark"] .facts,
-html[data-telegram-color-scheme="dark"] .progress-track{border-color:#34444a;background:#34444a}
-html[data-telegram-color-scheme="dark"] .facts span,
-html[data-telegram-color-scheme="dark"] .section-meta p,
-html[data-telegram-color-scheme="dark"] .muted,
-html[data-telegram-color-scheme="dark"] .footnote,
-html[data-telegram-color-scheme="dark"] .save-note,
-html[data-telegram-color-scheme="dark"] footer{color:#9aadb1}
-html[data-telegram-color-scheme="dark"] .intro h1 em,
-html[data-telegram-color-scheme="dark"] .done h1 em{color:#9bc6c9}
 @media(max-width:600px){
   .shell{padding-left:14px;padding-right:14px}
   .topbar{height:42px;margin-bottom:18px}
