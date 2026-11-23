@@ -123,20 +123,25 @@ function App() {
   useEffect(() => {
     const webApp = window.Telegram?.WebApp
     if (!webApp) return
-    const applyTelegramTheme = () => {
-      const params = webApp.themeParams ?? {}
+    const applyLightTheme = () => {
       const root = document.documentElement
-      if (params.bg_color) root.style.setProperty('--tg-bg-color', params.bg_color)
-      if (params.text_color) root.style.setProperty('--tg-text-color', params.text_color)
-      if (params.hint_color) root.style.setProperty('--tg-hint-color', params.hint_color)
-      if (params.button_color) root.style.setProperty('--tg-button-color', params.button_color)
-      root.dataset.telegramColorScheme = webApp.colorScheme ?? 'light'
+      root.dataset.telegramColorScheme = 'light'
+      root.style.setProperty('--tg-bg-color', '#f5f7f7')
+      root.style.setProperty('--tg-text-color', '#17252a')
+      root.style.setProperty('--tg-hint-color', '#77878b')
+      root.style.setProperty('--tg-button-color', '#174a54')
+      const telegram = webApp as typeof webApp & {
+        setBackgroundColor?: (color: string) => void
+        setHeaderColor?: (color: string) => void
+      }
+      telegram.setBackgroundColor?.('#f5f7f7')
+      telegram.setHeaderColor?.('#f5f7f7')
     }
     webApp.ready?.()
     webApp.expand?.()
-    applyTelegramTheme()
-    webApp.onEvent?.('themeChanged', applyTelegramTheme)
-    return () => webApp.offEvent?.('themeChanged', applyTelegramTheme)
+    applyLightTheme()
+    webApp.onEvent?.('themeChanged', applyLightTheme)
+    return () => webApp.offEvent?.('themeChanged', applyLightTheme)
   }, [])
 
   useEffect(() => {
