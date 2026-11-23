@@ -19,7 +19,8 @@ type SavedSession = {
   screen: 'intro' | 'survey' | 'done'
 }
 
-const API = import.meta.env.VITE_SURVEY_FUNCTION_URL as string
+const API = (import.meta.env.VITE_SURVEY_FUNCTION_URL as string | undefined)?.trim()
+  || 'https://mqxuhbbthshjuetbjxbh.supabase.co/functions/v1/survey-public'
 const SESSION_KEY = 'wnr:survey-session:v1'
 const headers = { 'Content-Type': 'application/json' }
 
