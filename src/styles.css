@@ -362,3 +362,48 @@ footer{padding-bottom:4px}
   .admin-filters{flex-direction:column}
   .admin-filters select{max-width:none}
 }
+
+
+/* WNR ADMIN — sharper, more readable system typography */
+.admin-page{
+  -webkit-font-smoothing:auto;
+  text-rendering:optimizeLegibility;
+  font-size:15px;
+  font-weight:400;
+  color:#1d1d1f;
+}
+.admin-page :where(p,span,small,label,input,select,button,h1,h2,h3,strong,b){
+  -webkit-font-smoothing:auto;
+}
+.admin-page .admin-muted,
+.admin-page .admin-panel-head p,
+.admin-page .admin-stats span,
+.admin-page .submission-main small,
+.admin-page .submission-status,
+.admin-page .submission-count,
+.admin-page .detail-meta,
+.admin-page .admin-placeholder,
+.admin-page .admin-empty,
+.admin-page .bar-row span{
+  color:#5f6368;
+}
+.admin-page .admin-stats small,
+.admin-page .admin-answers article small{
+  color:#555b61;
+}
+.admin-page .submission-main b{font-size:13px;font-weight:650}
+.admin-page .submission-main small,
+.admin-page .submission-status,
+.admin-page .submission-count{font-size:11px}
+.admin-page .admin-answers article small{font-size:10px}
+.admin-page .admin-answers h3{font-size:14px;line-height:1.5}
+.admin-page .admin-answers p{font-size:13px;line-height:1.7;color:#3a3a3c}
+.admin-page .admin-panel-head p{font-size:12px}
+.admin-page .admin-stats small{font-size:11px}
+.admin-page .admin-stats span{font-size:12px}
+.admin-page .detail-meta{font-size:11px}
+.admin-page .bar-row span,.admin-page .bar-row b{font-size:11px}
+.admin-page .admin-quiet,.admin-page .admin-export{font-size:13px}
+.admin-page .admin-login label{font-size:12px}
+.admin-page .admin-login input{font-size:14px}
+.admin-page .admin-error{font-size:13px;line-height:1.55}
