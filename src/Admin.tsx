@@ -142,6 +142,40 @@ export default function Admin() {
     const link = document.createElement('a'); link.href = url; link.download = 'wnr-responses.csv'; link.click(); URL.revokeObjectURL(url)
   }
 
+  function exportSubmissionCsv(submission: Submission) {
+    const submissionAnswers = answers
+      .filter(answer => answer.submission_id === submission.id)
+      .sort((left, right) => (questionById.get(left.question_id)?.position ?? 0) - (questionById.get(right.question_id)?.position ?? 0))
+    const rows = [
+      ['WNR — Ответы прохождения'],
+      ['ID прохождения', submission.id],
+      ['Статус', submission.status],
+      ['Язык', submission.locale],
+      ['Начато', submission.started_at || submission.created_at],
+      ['Завершено', submission.completed_at ?? ''],
+      [],
+      ['Раздел', 'Вопрос', 'Ответ', 'Дата ответа'],
+      ...submissionAnswers.map(answer => {
+        const question = questionById.get(answer.question_id)
+        return [
+          sectionById.get(question?.section_id ?? '') ?? 'Раздел не найден',
+          question?.prompt ?? answer.question_id,
+          answerLabel(answer.answer),
+          answer.created_at
+        ]
+      })
+    ]
+    const csv = rows.map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n')
+    const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `wnr-${submission.id.slice(0, 8)}-answers.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   if (!authReady) return <main className="admin-page"><div className="admin-loading">Загружаем панель…</div></main>
   if (!session) return <main className="admin-page"><section className="admin-login">
     <div className="admin-brand"><span>W</span><div><b>WNR</b><small>ADMINISTRATION</small></div></div>
@@ -172,9 +206,9 @@ export default function Admin() {
     <section className="admin-grid">
       <div className="admin-panel admin-list-panel"><div className="admin-panel-head"><div><h2>Прохождения</h2><p>Последние отправки и текущие сессии</p></div><span>{filtered.length}</span></div>
         <div className="admin-filters"><input placeholder="Найти по ID…" value={search} onChange={e=>setSearch(e.target.value)}/><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Все статусы</option><option value="completed">Завершённые</option><option value="in_progress">В процессе</option><option value="abandoned">Прерванные</option></select></div>
-        <div className="admin-submissions">{filtered.map(s=><button key={s.id} className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
+        <div className="admin-submissions">{filtered.map(s=><div key={s.id} className="submission-row"><button className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button><button className="submission-download" onClick={()=>exportSubmissionCsv(s)} title="Скачать ответы этой анкеты" aria-label="Скачать ответы этой анкеты" disabled={!answers.some(a=>a.submission_id===s.id)}>↓</button></div>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
       </div>
-      <div className="admin-panel admin-detail-panel"><div className="admin-panel-head"><div><h2>{selectedSubmission ? 'Ответы анкеты' : 'Детали прохождения'}</h2><p>{selectedSubmission ? selectedSubmission.id : 'Выбери прохождение слева'}</p></div></div>
+      <div className="admin-panel admin-detail-panel"><div className="admin-panel-head"><div><h2>{selectedSubmission ? 'Ответы анкеты' : 'Детали прохождения'}</h2><p>{selectedSubmission ? selectedSubmission.id : 'Выбери прохождение слева'}</p></div>{selectedSubmission && <button className="detail-export" onClick={()=>exportSubmissionCsv(selectedSubmission)} disabled={!selectedAnswers.length}>Скачать ответы ↓</button>}</div>
         {selectedSubmission ? <><div className="detail-meta"><span>{selectedSubmission.status}</span><span>Начата: {dateLabel(selectedSubmission.started_at || selectedSubmission.created_at)}</span><span>Завершена: {dateLabel(selectedSubmission.completed_at)}</span></div><div className="admin-answers">{selectedAnswers.map(a=>{const q=questionById.get(a.question_id);return <article key={a.question_id}><small>{sectionById.get(q?.section_id ?? '') ?? 'ВОПРОС'} · {q?.slug ?? ''}</small><h3>{q?.prompt ?? 'Вопрос удалён'}</h3><p>{answerLabel(a.answer)}</p></article>})}{!selectedAnswers.length && <p className="admin-empty">Ответов пока нет</p>}</div></> : <div className="admin-placeholder">Выбери анкету, чтобы посмотреть её ответы и статус.</div>}
       </div>
     </section>
