@@ -21,7 +21,7 @@ export default function Admin() {
   const [authReady, setAuthReady] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [email, setEmail] = useState('usdtuser1@proton.me')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(() => {
     const params = new URLSearchParams(window.location.hash.slice(1))
@@ -113,18 +113,25 @@ export default function Admin() {
     return [...counts.entries()].sort((a,b) => b[1]-a[1]).slice(0,6)
   }
 
-  async function sendLink(e: React.FormEvent) {
-    e.preventDefault(); setBusy(true); setError('')
-    const { error: authError } = await supabase.auth.signInWithOtp({
+  async function signIn(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
-      options: { emailRedirectTo: 'https://womens-needs-research.csgoidelka.workers.dev/admin' }
+      password
     })
     setBusy(false)
-    if (authError) setError(authError.message)
-    else setSent(true)
+    if (authError) setError('Не удалось войти. Проверь email и пароль.')
+    else setPassword('')
   }
 
-  async function signOut() { await supabase.auth.signOut(); setSession(null); setIsAdmin(false); setSent(false) }
+  async function signOut() {
+    await supabase.auth.signOut()
+    setSession(null)
+    setIsAdmin(false)
+    setPassword('')
+  }
   function exportCsv() {
     const rows = [['submission_id','status','question','answer','created_at'], ...answers.map(a => [
       a.submission_id, submissions.find(s => s.id === a.submission_id)?.status ?? '',
@@ -139,9 +146,14 @@ export default function Admin() {
   if (!session) return <main className="admin-page"><section className="admin-login">
     <div className="admin-brand"><span>W</span><div><b>WNR</b><small>ADMINISTRATION</small></div></div>
     <p className="admin-kicker">ЗАКРЫТЫЙ ДОСТУП</p><h1>Панель<br/><em>исследования.</em></h1>
-    <p className="admin-muted">Войди по ссылке, которая придёт на почту. Пароль не нужен.</p>
-    <form onSubmit={sendLink}><label htmlFor="admin-email">Электронная почта</label><input id="admin-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} required/><button disabled={busy}>{busy ? 'Отправляем…' : 'Получить ссылку для входа'} <span>→</span></button></form>
-    {sent && <p className="admin-success">Ссылка отправлена. Проверь почту и открой её на этом устройстве.</p>}
+    <p className="admin-muted">Войди в закрытую панель исследования с помощью пароля администратора.</p>
+    <form onSubmit={signIn}>
+      <label htmlFor="admin-email">Электронная почта</label>
+      <input id="admin-email" type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required/>
+      <label htmlFor="admin-password">Пароль</label>
+      <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/>
+      <button disabled={busy || !email.trim() || !password}>{busy ? 'Входим…' : 'Войти в панель'} <span>→</span></button>
+    </form>
     {error && <p className="admin-error">{error}</p>}
     <a className="admin-back" href="/">← Вернуться к опросу</a>
   </section></main>
