@@ -13,6 +13,7 @@ type Answer = string | string[] | number
 type SavedSession = {
   answers: Record<string, Answer>
   submissionId: string
+  sessionToken: string
   sectionIndex: number
   questionIndex: number
   screen: 'intro' | 'survey' | 'done'
@@ -27,10 +28,11 @@ function readSession(): SavedSession | null {
     const raw = sessionStorage.getItem(SESSION_KEY)
     if (!raw) return null
     const value = JSON.parse(raw) as Partial<SavedSession>
-    if (!value.submissionId || !value.answers || typeof value.answers !== 'object') return null
+    if (!value.submissionId || !value.sessionToken || !value.answers || typeof value.answers !== 'object') return null
     return {
       answers: value.answers,
       submissionId: value.submissionId,
+      sessionToken: value.sessionToken,
       sectionIndex: Number.isInteger(value.sectionIndex) ? Number(value.sectionIndex) : 0,
       questionIndex: Number.isInteger(value.questionIndex) ? Number(value.questionIndex) : 0,
       screen: value.screen === 'done' ? 'done' : 'survey',
@@ -57,6 +59,7 @@ function App() {
   const [survey, setSurvey] = useState<Survey | null>(null)
   const [answers, setAnswers] = useState<Record<string, Answer>>(saved?.answers ?? {})
   const [submissionId, setSubmissionId] = useState(saved?.submissionId ?? '')
+  const [sessionToken, setSessionToken] = useState(saved?.sessionToken ?? '')
   const [sectionIndex, setSectionIndex] = useState(saved?.sectionIndex ?? 0)
   const [questionIndex, setQuestionIndex] = useState(saved?.questionIndex ?? 0)
   const [screen, setScreen] = useState<'intro'|'survey'|'done'>(saved?.screen ?? 'intro')
@@ -100,7 +103,7 @@ function App() {
   useEffect(() => {
     if (!submissionId) return
     try {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ answers, submissionId, sectionIndex, questionIndex, screen }))
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ answers, submissionId, sessionToken, sectionIndex, questionIndex, screen }))
     } catch {
       setError('Не удалось сохранить прогресс на этом устройстве. Продолжайте без перезагрузки страницы.')
     }
@@ -130,6 +133,7 @@ function App() {
     try {
       const data = await request('', {action:'start', consent:true, locale:'ru'})
       setSubmissionId(data.submissionId)
+      setSessionToken(data.sessionToken)
       setScreen('survey')
     } catch(e) { setError(e instanceof Error ? e.message : 'Ошибка запуска') }
     finally { setBusy(false) }
@@ -145,7 +149,7 @@ function App() {
     }
     if (empty) return true
     try {
-      await request('', {action:'save', submissionId, questionId:currentQuestion.id, answer:value})
+      await request('', {action:'save', submissionId, sessionToken, questionId:currentQuestion.id, answer:value})
       return true
     } catch(e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить ответ')
@@ -164,7 +168,7 @@ function App() {
         setSectionIndex(i => i + 1)
         setQuestionIndex(0)
       } else {
-        const result = await request('', {action:'complete', submissionId})
+        const result = await request('', {action:'complete', submissionId, sessionToken})
         if (result.completed) setScreen('done')
       }
     } catch(e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
@@ -219,7 +223,7 @@ function App() {
 function AnswerInput({question, value, onChange}:{question:Question,value:Answer|undefined,onChange:(v:Answer)=>void}) {
   const type = question.question_type
   if (type === 'textarea' || type === 'text') return <textarea rows={type==='text'?2:4} maxLength={4000} placeholder="Ваш ответ…" value={typeof value==='string'?value:''} onChange={e=>onChange(e.target.value)}/>
-  if (type === 'number') return <input type="number" value={typeof value==='number'?value:''} onChange={e=>onChange(Number(e.target.value))}/>
+  if (type === 'number') return <input type="number" value={typeof value==='number'?value:''} onChange={e=>onChange(e.target.value === '' ? '' : Number(e.target.value))}/>
   if (type === 'scale') {
     const min = Number(question.config.min ?? 1), max = Number(question.config.max ?? 5)
     return <div className="scale">{Array.from({length:max-min+1},(_,i)=>min+i).map(n=><button key={n} className={value===n?'selected':''} onClick={()=>onChange(n)}>{n}</button>)}<div className="scale-labels"><span>Совсем не влияет</span><span>Очень сильно</span></div></div>
