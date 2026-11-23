@@ -149,3 +149,54 @@ html[data-telegram-color-scheme="dark"] .done h1 em{color:#9bc6c9}
   .question-card{padding:18px 13px}
   .nav-actions .secondary{min-width:88px}
 }
+
+
+/* Stable three-column facts layout for Telegram WebView */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  width: 100%;
+  gap: 8px;
+}
+
+.facts > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.facts strong {
+  display: block;
+  max-width: 100%;
+  font-size: clamp(18px, 6vw, 22px);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.facts span {
+  display: block;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 360px) {
+  .facts {
+    gap: 4px;
+  }
+
+  .facts > div {
+    padding-inline: 2px;
+  }
+
+  .facts span {
+    font-size: 10px;
+  }
+}
