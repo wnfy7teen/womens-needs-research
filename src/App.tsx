@@ -238,6 +238,19 @@ function App() {
     } else setScreen('intro')
   }
 
+  useEffect(() => {
+    const backButton = window.Telegram?.WebApp?.BackButton
+    if (!backButton) return
+    const handleBack = () => { void back() }
+    if (screen === 'survey') {
+      backButton.show?.()
+      backButton.onClick?.(handleBack)
+    } else {
+      backButton.hide?.()
+    }
+    return () => backButton.offClick?.(handleBack)
+  }, [screen, sectionIndex, questionIndex])
+
   if (loading) return <main className="shell centered"><div className="loader"/><p>Загружаем исследование…</p></main>
   if (!survey) return <main className="shell centered"><div className="brand-mark">W</div><h1>Не удалось загрузить опрос</h1><p className="muted">{error || 'Проверьте подключение и попробуйте снова.'}</p><button onClick={()=>location.reload()}>Повторить</button></main>
 
