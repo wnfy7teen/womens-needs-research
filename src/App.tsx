@@ -10,11 +10,52 @@ type Question = {
 type Section = { id: string; slug: string; title: string; description?: string; position: number }
 type Survey = { sections: Section[]; questions: Question[]; consentVersion: string }
 type Answer = string | string[] | number
+type SavedSession = {
+  answers: Record<string, Answer>
+  submissionId: string
+  sectionIndex: number
+  questionIndex: number
+  screen: 'intro' | 'survey' | 'done'
+}
+
+type TelegramWebApp = {
+  ready: () => void
+  expand: () => void
+  colorScheme?: 'light' | 'dark'
+  themeParams?: Record<string, string>
+  onEvent?: (event: string, callback: () => void) => void
+  offEvent?: (event: string, callback: () => void) => void
+}
+declare global {
+  interface Window {
+    Telegram?: { WebApp?: TelegramWebApp }
+  }
+}
 
 const API = import.meta.env.VITE_SURVEY_FUNCTION_URL as string
+const SESSION_KEY = 'wnr:survey-session:v1'
 const headers = { 'Content-Type': 'application/json' }
 
-async function request(path: string, body?: unknown) {
+function readSession(): SavedSession | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    if (!raw) return null
+    const value = JSON.parse(raw) as Partial<SavedSession>
+    if (!value.submissionId || !value.answers || typeof value.answers !== 'object') return null
+    return {
+      answers: value.answers,
+      submissionId: value.submissionId,
+      sectionIndex: Number.isInteger(value.sectionIndex) ? Number(value.sectionIndex) : 0,
+      questionIndex: Number.isInteger(value.questionIndex) ? Number(value.questionIndex) : 0,
+      screen: value.screen === 'done' ? 'done' : 'survey',
+    }
+  } catch {
+    return null
+  }
+}
+
+async function request(_path: string, body?: unknown) {
+  if (!API) throw new Error('Не настроен адрес API. Укажите VITE_SURVEY_FUNCTION_URL в настройках приложения.')
   const response = await fetch(API, {
     method: body ? 'POST' : 'GET',
     headers,
@@ -26,20 +67,58 @@ async function request(path: string, body?: unknown) {
 }
 
 function App() {
+  const [saved] = useState(readSession)
   const [survey, setSurvey] = useState<Survey | null>(null)
-  const [answers, setAnswers] = useState<Record<string, Answer>>({})
-  const [submissionId, setSubmissionId] = useState('')
-  const [sectionIndex, setSectionIndex] = useState(0)
-  const [questionIndex, setQuestionIndex] = useState(0)
-  const [screen, setScreen] = useState<'intro'|'survey'|'done'>('intro')
+  const [answers, setAnswers] = useState<Record<string, Answer>>(saved?.answers ?? {})
+  const [submissionId, setSubmissionId] = useState(saved?.submissionId ?? '')
+  const [sectionIndex, setSectionIndex] = useState(saved?.sectionIndex ?? 0)
+  const [questionIndex, setQuestionIndex] = useState(saved?.questionIndex ?? 0)
+  const [screen, setScreen] = useState<'intro'|'survey'|'done'>(saved?.screen ?? 'intro')
   const [consent, setConsent] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    request('').then(setSurvey).catch(e => setError(e.message)).finally(() => setLoading(false))
+    const webApp = window.Telegram?.WebApp
+    if (!webApp) return
+    const applyTelegramTheme = () => {
+      const params = webApp.themeParams ?? {}
+      const root = document.documentElement
+      if (params.bg_color) root.style.setProperty('--tg-bg-color', params.bg_color)
+      if (params.text_color) root.style.setProperty('--tg-text-color', params.text_color)
+      if (params.hint_color) root.style.setProperty('--tg-hint-color', params.hint_color)
+      if (params.button_color) root.style.setProperty('--tg-button-color', params.button_color)
+      root.dataset.telegramColorScheme = webApp.colorScheme ?? 'light'
+    }
+    webApp.ready()
+    webApp.expand()
+    applyTelegramTheme()
+    webApp.onEvent?.('themeChanged', applyTelegramTheme)
+    return () => webApp.offEvent?.('themeChanged', applyTelegramTheme)
   }, [])
+
+  useEffect(() => {
+    request('').then(data => {
+      setSurvey(data)
+      if (saved) {
+        const maxSection = Math.max(0, (data.sections?.length ?? 1) - 1)
+        setSectionIndex(Math.min(saved.sectionIndex, maxSection))
+        const restoredSection = data.sections?.[Math.min(saved.sectionIndex, maxSection)]
+        const count = data.questions?.filter((q: Question) => q.section_id === restoredSection?.id).length ?? 1
+        setQuestionIndex(Math.min(saved.questionIndex, Math.max(0, count - 1)))
+      }
+    }).catch(e => setError(e.message)).finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!submissionId) return
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ answers, submissionId, sectionIndex, questionIndex, screen }))
+    } catch {
+      setError('Не удалось сохранить прогресс на этом устройстве. Продолжайте без перезагрузки страницы.')
+    }
+  }, [answers, submissionId, sectionIndex, questionIndex, screen])
 
   const sections = survey?.sections ?? []
   const currentSection = sections[sectionIndex]
@@ -144,7 +223,7 @@ function App() {
       </article>
       {error && <p className="error">{error}</p>}
       <div className="nav-actions"><button className="secondary" onClick={back} disabled={busy}>Назад</button><button className="primary" onClick={next} disabled={busy}>{busy?'Сохраняем…':sectionIndex===sections.length-1 && questionIndex===sectionQuestions.length-1?'Завершить':'Продолжить'} <span>→</span></button></div>
-      <p className="save-note">Ответ сохраняется при переходе к следующему вопросу.</p>
+      <p className="save-note">Ответы автоматически сохраняются в рамках текущей вкладки; на сервер отправляются при переходе к следующему вопросу.</p>
     </section>}
     {screen === 'done' && <section className="done panel"><div className="success-icon">✓</div><div className="eyebrow">ИССЛЕДОВАНИЕ ЗАВЕРШЕНО</div><h1>Спасибо за ваше<br/><em>время и честность.</em></h1><p className="lead">Ваши ответы помогут лучше понять реальные потребности и найти идеи полезных решений.</p><p className="footnote">Анкета отправлена. Вы можете закрыть это окно.</p></section>}
     <footer>© 2026 WOMEN'S NEEDS RESEARCH <span>Создано для изучения реальных потребностей</span></footer>
