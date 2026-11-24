@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient, type Session } from '@supabase/supabase-js'
+import { localPriceLabel, resolveCurrency } from './currency'
 
 const supabase = createClient(
   'https://mqxuhbbthshjuetbjxbh.supabase.co',
@@ -11,10 +12,10 @@ type Submission = { id: string; status: string; locale: string; version_id: stri
 type SurveyVersion = { id: string; slug: string; title: string }
 type Question = { id: string; prompt: string; slug: string; section_id: string; position: number }
 type Answer = { submission_id: string; question_id: string; answer: unknown; created_at: string }
+type Option = { question_id: string; value: string; label: string; position: number }
 type Section = { id: string; title: string; position: number }
 
 const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—'
-const answerLabel = (value: unknown) => Array.isArray(value) ? value.join(', ') : typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '—')
 const pretty = (value: string) => value.replace(/_/g, ' ').replace(/^./, c => c.toLocaleUpperCase('ru'))
 
 export default function Admin() {
@@ -36,6 +37,7 @@ export default function Admin() {
   const [sections, setSections] = useState<Section[]>([])
   const [versions, setVersions] = useState<SurveyVersion[]>([])
   const [answers, setAnswers] = useState<Answer[]>([])
+  const [options, setOptions] = useState<Option[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -64,20 +66,22 @@ export default function Admin() {
   const load = useCallback(async () => {
     if (!isAdmin) return
     setError('')
-    const [s, q, sec, a, v] = await Promise.all([
+    const [s, q, sec, a, v, o] = await Promise.all([
       supabase.from('survey_submissions').select('id,status,locale,version_id,created_at,started_at,completed_at').order('created_at', { ascending: false }).limit(500),
       supabase.from('survey_questions').select('id,prompt,slug,section_id,position').order('position'),
       supabase.from('survey_sections').select('id,title,position').order('position'),
       supabase.from('survey_answers').select('submission_id,question_id,answer,created_at').order('created_at', { ascending: false }).limit(10000),
-      supabase.from('survey_versions').select('id,slug,title')
+      supabase.from('survey_versions').select('id,slug,title'),
+      supabase.from('survey_options').select('question_id,value,label,position').order('position')
     ])
-    const failed = [s.error, q.error, sec.error, a.error, v.error].find(Boolean)
+    const failed = [s.error, q.error, sec.error, a.error, v.error, o.error].find(Boolean)
     if (failed) { setError(failed.message); return }
     setSubmissions(s.data ?? [])
     setQuestions(q.data ?? [])
     setSections(sec.data ?? [])
     setVersions(v.data ?? [])
     setAnswers(a.data ?? [])
+    setOptions(o.data ?? [])
     setUpdatedAt(new Date())
   }, [isAdmin])
 
@@ -101,8 +105,25 @@ export default function Admin() {
   }), [submissions, answers])
 
   const questionById = useMemo(() => new Map(questions.map(q => [q.id, q])), [questions])
+  const optionLabels = useMemo(() => new Map(options.map(option => [`${option.question_id}:${option.value}`, option.label])), [options])
   const sectionById = useMemo(() => new Map(sections.map(s => [s.id, s.title])), [sections])
   const versionById = useMemo(() => new Map(versions.map(v => [v.id, v.slug.toLocaleUpperCase('ru').replace(/_/g,' ')])), [versions])
+  const displayAnswer = (questionId: string, value: unknown, submissionId?: string) => {
+    const question = questionById.get(questionId)
+    const values = Array.isArray(value) ? value : [value]
+    const countryQuestion = questions.find(item => item.slug === 'v2_country' || item.slug === 'country')
+    const countryAnswer = submissionId && countryQuestion
+      ? answers.find(item => item.submission_id === submissionId && item.question_id === countryQuestion.id)?.answer
+      : undefined
+    const currency = resolveCurrency(String(countryAnswer ?? ''))
+    const labels = values.map(item => {
+      const raw = String(item ?? '')
+      if (question?.slug === 'v2_price_range' || question?.slug === 'price_range') return localPriceLabel(raw, currency)
+      return optionLabels.get(`${questionId}:${raw}`) ?? raw
+    }).filter(Boolean)
+    if (value && typeof value === 'object' && !Array.isArray(value)) return JSON.stringify(value, null, 2)
+    return labels.join(', ') || '—'
+  }
   const filtered = submissions.filter(s => (filter === 'all' || s.status === filter) &&
     (s.id.toLowerCase().includes(search.toLowerCase()) || s.locale.toLowerCase().includes(search.toLowerCase())))
   const selectedSubmission = submissions.find(s => s.id === selected)
@@ -114,7 +135,7 @@ export default function Admin() {
     const counts = new Map<string, number>()
     answers.filter(a => a.question_id === question.id).forEach(a => {
       const values = Array.isArray(a.answer) ? a.answer : [a.answer]
-      values.forEach(v => { const label = pretty(String(v)); counts.set(label, (counts.get(label) ?? 0) + 1) })
+      values.forEach(v => { const label = displayAnswer(question.id, v); counts.set(label, (counts.get(label) ?? 0) + 1) })
     })
     return [...counts.entries()].sort((a,b) => b[1]-a[1]).slice(0,6)
   }
@@ -141,7 +162,7 @@ export default function Admin() {
   function exportCsv() {
     const rows = [['submission_id','version','status','question','answer','created_at'], ...answers.map(a => [
       a.submission_id, versionById.get(submissions.find(s => s.id === a.submission_id)?.version_id ?? '') ?? '', submissions.find(s => s.id === a.submission_id)?.status ?? '',
-      questionById.get(a.question_id)?.prompt ?? a.question_id, answerLabel(a.answer), a.created_at
+      questionById.get(a.question_id)?.prompt ?? a.question_id, displayAnswer(a.question_id, a.answer, a.submission_id), a.created_at
     ])]
     const csv = rows.map(row => row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')
     const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }))
@@ -211,14 +232,14 @@ export default function Admin() {
         return result.length ? result : ['—']
       }
 
-      const answerText = (value: unknown) => {
+      const answerText = (questionIdForExport: string, value: unknown) => {
         if (Array.isArray(value)) return value.map(item => String(item ?? '')).filter(Boolean).join(' · ') || '—'
         if (value && typeof value === 'object') {
           return Object.entries(value as Record<string, unknown>)
             .map(([key, item]) => pretty(key) + ': ' + (typeof item === 'string' ? item : JSON.stringify(item)))
             .join('\n') || '—'
         }
-        return String(value ?? '—')
+        return displayAnswer(questionIdForExport, value, submission.id)
       }
 
       const questionFont = '600 23px Arial'
@@ -259,7 +280,7 @@ export default function Admin() {
           questionNumber++
           const question = questionById.get(answer.question_id)
           const questionLines = wrapText(question?.prompt ?? 'Вопрос удалён', questionFont, 990)
-          const answerLines = wrapText(answerText(answer.answer), answerFont, 990)
+          const answerLines = wrapText(answerText(answer.question_id, answer.answer), answerFont, 990)
           const chunks: string[][] = []
           for (let index = 0; index < answerLines.length; index += 27) chunks.push(answerLines.slice(index, index + 27))
           chunks.forEach((chunk, chunkIndex) => {
@@ -464,7 +485,7 @@ export default function Admin() {
         <div className="admin-submissions">{filtered.map(s=><div key={s.id} className="submission-row"><button className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)} · {versionById.get(s.version_id) ?? 'WNR'}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button><button className="submission-download" onClick={()=>void exportSubmissionImages(s)} title="Скачать PNG-страницы в ZIP" aria-label="Скачать PNG-страницы в ZIP" disabled={!answers.some(a=>a.submission_id===s.id) || exportingSubmission===s.id}>{exportingSubmission===s.id?'…':'↓'}</button></div>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
       </div>
       <div className="admin-panel admin-detail-panel"><div className="admin-panel-head"><div><h2>{selectedSubmission ? 'Ответы анкеты' : 'Детали прохождения'}</h2><p>{selectedSubmission ? selectedSubmission.id : 'Выбери прохождение слева'}</p></div>{selectedSubmission && <button className="detail-export" onClick={()=>void exportSubmissionImages(selectedSubmission)} disabled={!selectedAnswers.length || exportingSubmission===selectedSubmission.id}>{exportingSubmission===selectedSubmission.id?'Готовим PNG-страницы…':'Скачать PNG-отчёт (ZIP) ↓'}</button>}</div>
-        {selectedSubmission ? <><div className="detail-meta"><span>{selectedSubmission.status}</span><span>{versionById.get(selectedSubmission.version_id) ?? 'WNR'}</span><span>Начата: {dateLabel(selectedSubmission.started_at || selectedSubmission.created_at)}</span><span>Завершена: {dateLabel(selectedSubmission.completed_at)}</span></div><div className="admin-answers">{selectedAnswers.map(a=>{const q=questionById.get(a.question_id);return <article key={a.question_id}><small>{sectionById.get(q?.section_id ?? '') ?? 'ВОПРОС'} · {q?.slug ?? ''}</small><h3>{q?.prompt ?? 'Вопрос удалён'}</h3><p>{answerLabel(a.answer)}</p></article>})}{!selectedAnswers.length && <p className="admin-empty">Ответов пока нет</p>}</div></> : <div className="admin-placeholder">Выбери анкету, чтобы посмотреть её ответы и статус.</div>}
+        {selectedSubmission ? <><div className="detail-meta"><span>{selectedSubmission.status}</span><span>{versionById.get(selectedSubmission.version_id) ?? 'WNR'}</span><span>Начата: {dateLabel(selectedSubmission.started_at || selectedSubmission.created_at)}</span><span>Завершена: {dateLabel(selectedSubmission.completed_at)}</span></div><div className="admin-answers">{selectedAnswers.map(a=>{const q=questionById.get(a.question_id);return <article key={a.question_id}><small>{sectionById.get(q?.section_id ?? '') ?? 'ВОПРОС'} · {q?.slug ?? ''}</small><h3>{q?.prompt ?? 'Вопрос удалён'}</h3><p>{displayAnswer(a.question_id, a.answer, a.submission_id)}</p></article>})}{!selectedAnswers.length && <p className="admin-empty">Ответов пока нет</p>}</div></> : <div className="admin-placeholder">Выбери анкету, чтобы посмотреть её ответы и статус.</div>}
       </div>
     </section>
     <section className="admin-analytics"><div className="admin-panel-head"><div><h2>Быстрые срезы</h2><p>Частота выбранных вариантов по сохранённым ответам</p></div></div><div className="analytics-grid">{[['v2_age','Возраст'],['v2_country','Страна'],['v2_problem_frequency','Частота трудностей'],['v2_price_range','Приемлемая цена']].map(([slug,title])=><article className="admin-panel analytics-card" key={slug}><h3>{title}</h3>{distribution(slug).map(([label,count])=><div className="bar-row" key={label}><span>{label}</span><div><i style={{width: (count/Math.max(1,...distribution(slug).map(x=>x[1]))*100)+'%'}}/></div><b>{count}</b></div>)}{!distribution(slug).length && <p className="admin-empty">Пока недостаточно данных</p>}</article>)}</div></section>
