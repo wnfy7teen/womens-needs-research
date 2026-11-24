@@ -11,7 +11,7 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   'сша':'USD','соединенные штаты':'USD','соединённые штаты':'USD','united states':'USD','united states of america':'USD','usa':'USD',
   'великобритания':'GBP','соединенное королевство':'GBP','соединённое королевство':'GBP','united kingdom':'GBP','great britain':'GBP','uk':'GBP',
   'швейцария':'CHF','switzerland':'CHF','польша':'PLN','poland':'PLN','украина':'UAH','україна':'UAH','ukraine':'UAH',
-  'казахстан':'KZT','kazakhstan':'KZT','турция':'TRY','турция':'TRY','türkiye':'TRY','turkey':'TRY',
+  'казахстан':'KZT','kazakhstan':'KZT','турция':'TRY','турция':'TRY','turkiye':'TRY','türkiye':'TRY','turkey':'TRY',
   'китай':'CNY','china':'CNY','канада':'CAD','canada':'CAD','австралия':'AUD','australia':'AUD',
   'беларусь':'BYN','белоруссия':'BYN','belarus':'BYN','грузия':'GEL','georgia':'GEL','армения':'AMD','armenia':'AMD',
   'япония':'JPY','japan':'JPY','чехия':'CZK','чешская республика':'CZK','czechia':'CZK','czech republic':'CZK',
@@ -24,7 +24,7 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   'индонезия':'IDR','indonesia':'IDR','филиппины':'PHP','philippines':'PHP','вьетнам':'VND','vietnam':'VND',
   'саудовская аравия':'SAR','saudi arabia':'SAR','катар':'QAR','qatar':'QAR','кувейт':'KWD','kuwait':'KWD',
   'мальдивы':'MVR','maldives':'MVR','исландия':'ISK','iceland':'ISK','сербия':'RSD','serbia':'RSD',
-  'болгария':'BGN','bulgaria':'BGN','молдова':'MDL','молдова':'MDL','moldova':'MDL','азербайджан':'AZN','azerbaijan':'AZN',
+  'болгария':'BGN','bulgaria':'BGN','молдова':'MDL','moldova':'MDL','азербайджан':'AZN','azerbaijan':'AZN',
   'узбекистан':'UZS','uzbekistan':'UZS','киргизия':'KGS','кыргызстан':'KGS','kyrgyzstan':'KGS',
   'маврикий':'MUR','mauritius':'MUR','марокко':'MAD','morocco':'MAD','египет':'EGP','egypt':'EGP',
   'нигерия':'NGN','nigeria':'NGN','гана':'GHS','ghana':'GHS','кения':'KES','kenya':'KES',
@@ -89,11 +89,11 @@ export function formatLocalAmount(eurAmount: number, currency: CurrencyInfo): st
 }
 
 export function localPriceLabel(value: string, currency: CurrencyInfo): string {
-  if (value === 'up_to_5') return 'До ' + formatLocalAmount(5,currency)
+  if (value === 'up_to_5' || value === 'до_5') return 'До ' + formatLocalAmount(5,currency)
   if (value === '5_10') return formatLocalAmount(5,currency) + ' – ' + formatLocalAmount(10,currency)
   if (value === '11_20') return formatLocalAmount(10,currency) + ' – ' + formatLocalAmount(20,currency)
   if (value === '21_40') return formatLocalAmount(20,currency) + ' – ' + formatLocalAmount(40,currency)
-  if (value === 'over_40') return 'Более ' + formatLocalAmount(40,currency)
+  if (value === 'over_40' || value === 'более_40') return 'Более ' + formatLocalAmount(40,currency)
   return value
 }
 
