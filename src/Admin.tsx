@@ -149,100 +149,278 @@ export default function Admin() {
       .sort((left, right) => (questionById.get(left.question_id)?.position ?? 0) - (questionById.get(right.question_id)?.position ?? 0))
     if (!submissionAnswers.length) return
     setExportingSubmission(submission.id)
+    setError('')
     try {
       const width = 1200
-      const escapeXml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
-      const wrap = (value: string, limit: number) => {
-        const words = value.split(/\s+/)
-        const lines: string[] = []
-        let line = ''
-        for (const word of words) {
-          const next = line ? line + ' ' + word : word
-          if (next.length > limit && line) { lines.push(line); line = word }
-          else line = next
+      const pageHeight = 1600
+      const left = 72
+      const cardWidth = 1056
+      const contentTop = 310
+      const contentBottom = 1440
+      const encoder = new TextEncoder()
+      const measureCanvas = document.createElement('canvas')
+      const measure = measureCanvas.getContext('2d')
+      if (!measure) throw new Error('Не удалось подготовить измерение текста')
+
+      const escapeXml = (value: string) => value
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+
+      const splitLongWord = (word: string, font: string, maxWidth: number) => {
+        const parts: string[] = []
+        let part = ''
+        for (const character of Array.from(word)) {
+          const next = part + character
+          measure.font = font
+          if (part && measure.measureText(next).width > maxWidth) {
+            parts.push(part)
+            part = character
+          } else part = next
         }
-        if (line) lines.push(line)
-        return lines.length ? lines : ['—']
+        if (part) parts.push(part)
+        return parts
       }
+
+      const wrapText = (value: string, font: string, maxWidth: number) => {
+        measure.font = font
+        const result: string[] = []
+        const paragraphs = String(value ?? '').replace(/\r\n?/g, '\n').split('\n')
+        for (const paragraph of paragraphs) {
+          const words = paragraph.trim().split(/\s+/).filter(Boolean)
+          if (!words.length) { result.push(''); continue }
+          let line = ''
+          for (const originalWord of words) {
+            const pieces = measure.measureText(originalWord).width > maxWidth
+              ? splitLongWord(originalWord, font, maxWidth)
+              : [originalWord]
+            for (const piece of pieces) {
+              const candidate = line ? line + ' ' + piece : piece
+              if (line && measure.measureText(candidate).width > maxWidth) {
+                result.push(line)
+                line = piece
+              } else line = candidate
+            }
+          }
+          if (line) result.push(line)
+        }
+        return result.length ? result : ['—']
+      }
+
+      const answerText = (value: unknown) => {
+        if (Array.isArray(value)) return value.map(item => String(item ?? '')).filter(Boolean).join(' · ') || '—'
+        if (value && typeof value === 'object') {
+          return Object.entries(value as Record<string, unknown>)
+            .map(([key, item]) => pretty(key) + ': ' + (typeof item === 'string' ? item : JSON.stringify(item)))
+            .join('\n') || '—'
+        }
+        return String(value ?? '—')
+      }
+
+      const questionFont = '600 23px Arial'
+      const answerFont = '400 20px Arial'
       const groups = sections.map(section => ({
-        section,
+        title: section.title,
         items: submissionAnswers.filter(answer => questionById.get(answer.question_id)?.section_id === section.id)
       })).filter(group => group.items.length)
-      const ungrouped = submissionAnswers.filter(answer => !sections.some(section => section.id === questionById.get(answer.question_id)?.section_id))
-      if (ungrouped.length) groups.push({ section: { id: 'other', title: 'Другие ответы', position: 999 }, items: ungrouped })
-      let y = 420
-      const body: string[] = []
+      const ungrouped = submissionAnswers.filter(answer =>
+        !sections.some(section => section.id === questionById.get(answer.question_id)?.section_id))
+      if (ungrouped.length) groups.push({ title: 'Другие ответы', items: ungrouped })
+
+      type ReportBlock =
+        | { kind: 'section'; title: string; height: number }
+        | { kind: 'answer'; number: number; total: number; questionLines: string[]; answerLines: string[]; continued: boolean; height: number }
+
+      const pages: ReportBlock[][] = [[]]
+      let usedHeight = contentTop
+      let currentPage = 0
+      const newPage = () => {
+        pages.push([])
+        currentPage++
+        usedHeight = contentTop
+      }
+      const addBlock = (block: ReportBlock) => {
+        if (usedHeight + block.height > contentBottom && pages[currentPage].length) newPage()
+        pages[currentPage].push(block)
+        usedHeight += block.height
+      }
+
       let questionNumber = 0
       for (const group of groups) {
-        body.push(`<text x="72" y="${y}" class="section">${escapeXml(group.section.title.toLocaleUpperCase('ru'))}</text>`)
-        y += 28
+        const sectionBlock: ReportBlock = { kind: 'section', title: group.title, height: 58 }
+        if (usedHeight + sectionBlock.height + 170 > contentBottom && pages[currentPage].length) newPage()
+        addBlock(sectionBlock)
+
         for (const answer of group.items) {
           questionNumber++
           const question = questionById.get(answer.question_id)
-          const questionLines = wrap(question?.prompt ?? 'Вопрос удалён', 65)
-          const answerLines = wrap(answerLabel(answer.answer), 68)
-          const cardHeight = 82 + questionLines.length * 32 + answerLines.length * 30
-          const top = y
-          const qText = questionLines.map((line, lineIndex) => `<text x="104" y="${top + 82 + lineIndex * 32}" class="question">${escapeXml(line)}</text>`).join('')
-          const aStart = top + 108 + questionLines.length * 32
-          const aText = answerLines.map((line, lineIndex) => `<text x="104" y="${aStart + lineIndex * 30}" class="answer">${escapeXml(line)}</text>`).join('')
-          body.push(`<rect x="72" y="${top}" width="1056" height="${cardHeight}" rx="22" fill="#ffffff" stroke="#e6e8eb"/><text x="104" y="${top + 43}" class="number">${String(questionNumber).padStart(2, '0')} / ${submissionAnswers.length}</text>${qText}<line x1="104" y1="${aStart - 24}" x2="1096" y2="${aStart - 24}" stroke="#eceef0"/>${aText}`)
-          y += cardHeight + 18
+          const questionLines = wrapText(question?.prompt ?? 'Вопрос удалён', questionFont, 990)
+          const answerLines = wrapText(answerText(answer.answer), answerFont, 990)
+          const chunks: string[][] = []
+          for (let index = 0; index < answerLines.length; index += 27) chunks.push(answerLines.slice(index, index + 27))
+          chunks.forEach((chunk, chunkIndex) => {
+            const continued = chunkIndex > 0
+            const qLines = continued ? ['Ответ продолжается'] : questionLines
+            const height = 70 + qLines.length * 31 + 24 + chunk.length * 29 + 30
+            const block: ReportBlock = {
+              kind: 'answer', number: questionNumber, total: submissionAnswers.length,
+              questionLines: qLines, answerLines: chunk, continued, height
+            }
+            if (usedHeight + block.height > contentBottom && pages[currentPage].length) {
+              newPage()
+              addBlock({ kind: 'section', title: group.title + ' · продолжение', height: 58 })
+            }
+            addBlock(block)
+          })
         }
-        y += 22
       }
-      const height = Math.max(1600, y + 120)
+
       const status = submission.status === 'completed' ? 'Завершена' : submission.status === 'in_progress' ? 'В процессе' : 'Прервана'
       const created = dateLabel(submission.started_at || submission.created_at)
       const completed = dateLabel(submission.completed_at)
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-        <rect width="1200" height="${height}" fill="#f5f5f7"/>
-        <text x="72" y="92" font-family="Arial,sans-serif" font-size="24" font-weight="700" letter-spacing="4" fill="#003d55">WNR  /  WOMEN'S NEEDS RESEARCH</text>
-        <text x="72" y="188" font-family="Arial,sans-serif" font-size="58" font-weight="700" fill="#1d1d1f">Ответы участницы</text>
-        <text x="72" y="238" font-family="Arial,sans-serif" font-size="23" fill="#6e6e73">Индивидуальный отчёт исследования</text>
-        <rect x="72" y="278" width="1056" height="92" rx="16" fill="#ffffff" stroke="#e6e8eb"/>
-        <text x="100" y="315" font-family="Arial,sans-serif" font-size="17" fill="#6e6e73">СТАТУС  ·  ${escapeXml(status)}</text>
-        <text x="100" y="346" font-family="Arial,sans-serif" font-size="17" fill="#6e6e73">НАЧАТО  ·  ${escapeXml(created)}     ЗАВЕРШЕНО  ·  ${escapeXml(completed)}</text>
-        <style>
-          .section{font:700 19px Arial,sans-serif;letter-spacing:2px;fill:#0071e3}
-          .number{font:600 15px Arial,sans-serif;fill:#0071e3}
-          .question{font:600 23px Arial,sans-serif;fill:#1d1d1f}
-          .answer{font:20px Arial,sans-serif;fill:#424245}
-        </style>
-        ${body.join('')}
-        <line x1="72" y1="${height - 82}" x2="1128" y2="${height - 82}" stroke="#dfe1e5"/>
-        <text x="72" y="${height - 42}" font-family="Arial,sans-serif" font-size="15" fill="#6e6e73">WNR · PRIVATE RESEARCH REPORT</text>
-        <text x="1128" y="${height - 42}" text-anchor="end" font-family="Arial,sans-serif" font-size="15" fill="#6e6e73">ID ${escapeXml(submission.id.slice(0, 8))}  ·  ${submissionAnswers.length} ОТВЕТОВ</text>
-      </svg>`
-      const svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }))
-      try {
-        const image = new Image()
-        image.src = svgUrl
-        await new Promise<void>((resolve, reject) => {
-          image.onload = () => resolve()
-          image.onerror = () => reject(new Error('Не удалось подготовить изображение отчёта'))
-        })
-        const canvas = document.createElement('canvas')
-        canvas.width = width
-        canvas.height = height
-        const context = canvas.getContext('2d')
-        if (!context) throw new Error('Canvas недоступен')
-        context.drawImage(image, 0, 0, width, height)
-        const png = await new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Не удалось создать PNG')), 'image/png'))
-        const imageUrl = URL.createObjectURL(png)
-        const link = document.createElement('a')
-        link.href = imageUrl
-        link.download = `WNR-${submission.id.slice(0, 8)}-answers.png`
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
-        window.setTimeout(() => URL.revokeObjectURL(imageUrl), 1500)
-      } finally {
-        URL.revokeObjectURL(svgUrl)
+      const renderLines = (lines: string[], x: number, startY: number, className: string, lineHeight: number) =>
+        lines.map((line, index) =>
+          '<text x="' + x + '" y="' + (startY + index * lineHeight) + '" class="' + className + '">' + escapeXml(line || ' ') + '</text>'
+        ).join('')
+
+      const renderPage = async (blocks: ReportBlock[], pageIndex: number) => {
+        let y = contentTop
+        const content: string[] = []
+        for (const block of blocks) {
+          if (block.kind === 'section') {
+            content.push('<rect x="' + left + '" y="' + y + '" width="' + cardWidth + '" height="42" rx="12" fill="#eaf2ff"/>')
+            content.push('<text x="' + (left + 22) + '" y="' + (y + 28) + '" class="section">' + escapeXml(block.title.toLocaleUpperCase('ru')) + '</text>')
+            y += block.height
+            continue
+          }
+          const top = y
+          const questionStart = top + 68
+          const separatorY = questionStart + block.questionLines.length * 31 + 12
+          const answerStart = separatorY + 35
+          content.push('<rect x="' + left + '" y="' + top + '" width="' + cardWidth + '" height="' + (block.height - 12) + '" rx="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="1.5"/>')
+          content.push('<text x="' + (left + 28) + '" y="' + (top + 35) + '" class="number">' + String(block.number).padStart(2, '0') + ' / ' + block.total + (block.continued ? ' · ПРОДОЛЖЕНИЕ' : '') + '</text>')
+          content.push(renderLines(block.questionLines, left + 28, questionStart, 'question', 31))
+          content.push('<line x1="' + (left + 28) + '" y1="' + separatorY + '" x2="' + (left + cardWidth - 28) + '" y2="' + separatorY + '" stroke="#eceef1" stroke-width="1.5"/>')
+          content.push(renderLines(block.answerLines, left + 28, answerStart, 'answer', 29))
+          y += block.height
+        }
+
+        const title = pageIndex === 0 ? 'Ответы участницы' : 'Ответы участницы · продолжение'
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + pageHeight + '" viewBox="0 0 ' + width + ' ' + pageHeight + '">' +
+          '<rect width="' + width + '" height="' + pageHeight + '" fill="#f5f5f7"/>' +
+          '<text x="' + left + '" y="76" class="brand">WNR <tspan fill="#9aa0a6">/</tspan> WOMEN&#39;S NEEDS RESEARCH</text>' +
+          '<text x="' + left + '" y="158" class="title">' + escapeXml(title) + '</text>' +
+          '<text x="' + left + '" y="205" class="subtitle">Индивидуальный отчёт исследования</text>' +
+          '<rect x="' + left + '" y="235" width="' + cardWidth + '" height="56" rx="14" fill="#ffffff" stroke="#e5e7eb"/>' +
+          '<text x="' + (left + 22) + '" y="270" class="meta">СТАТУС · ' + escapeXml(status) + '　　НАЧАТО · ' + escapeXml(created) + '　　ЗАВЕРШЕНО · ' + escapeXml(completed) + '</text>' +
+          content.join('') +
+          '<line x1="' + left + '" y1="1510" x2="' + (left + cardWidth) + '" y2="1510" stroke="#dfe1e5"/>' +
+          '<text x="' + left + '" y="1544" class="footer">WNR · PRIVATE RESEARCH REPORT · ID ' + escapeXml(submission.id.slice(0, 8)) + '</text>' +
+          '<text x="' + (left + cardWidth) + '" y="1544" text-anchor="end" class="footer">СТРАНИЦА ' + (pageIndex + 1) + ' ИЗ ' + pages.length + '</text>' +
+          '<style>text{font-family:Arial,"Noto Sans",sans-serif}.brand{font-size:20px;font-weight:700;letter-spacing:3px;fill:#003d55}.title{font-size:48px;font-weight:700;fill:#1d1d1f}.subtitle{font-size:19px;fill:#6e6e73}.meta{font-size:14px;font-weight:600;fill:#62666c}.section{font-size:16px;font-weight:700;letter-spacing:1.3px;fill:#075fc4}.number{font-size:14px;font-weight:700;letter-spacing:.5px;fill:#0874df}.question{font-size:23px;font-weight:600;fill:#1d1d1f}.answer{font-size:20px;font-weight:400;fill:#424245}.footer{font-size:13px;letter-spacing:.5px;fill:#777b82}</style></svg>'
+
+        const svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }))
+        try {
+          const image = new Image()
+          image.src = svgUrl
+          await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve()
+            image.onerror = () => reject(new Error('Не удалось отрисовать страницу ' + (pageIndex + 1)))
+          })
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = pageHeight
+          const context = canvas.getContext('2d')
+          if (!context) throw new Error('Canvas недоступен')
+          context.fillStyle = '#f5f5f7'
+          context.fillRect(0, 0, width, pageHeight)
+          context.drawImage(image, 0, 0, width, pageHeight)
+          return await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Не удалось создать PNG страницы ' + (pageIndex + 1))), 'image/png')
+          })
+        } finally {
+          URL.revokeObjectURL(svgUrl)
+        }
       }
+
+      const pngFiles: { name: string; bytes: Uint8Array }[] = []
+      for (let index = 0; index < pages.length; index++) {
+        const png = await renderPage(pages[index], index)
+        pngFiles.push({
+          name: 'WNR-' + submission.id.slice(0, 8) + '-page-' + String(index + 1).padStart(2, '0') + '.png',
+          bytes: new Uint8Array(await png.arrayBuffer())
+        })
+      }
+
+      const crcTable = new Uint32Array(256)
+      for (let n = 0; n < 256; n++) {
+        let c = n
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1)
+        crcTable[n] = c >>> 0
+      }
+      const crc32 = (bytes: Uint8Array) => {
+        let crc = 0xffffffff
+        for (const byte of bytes) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8)
+        return (crc ^ 0xffffffff) >>> 0
+      }
+      const zipParts: Uint8Array[] = []
+      const centralParts: Uint8Array[] = []
+      let offset = 0
+      const now = new Date()
+      const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2)
+      const dosDate = ((Math.max(1980, now.getFullYear()) - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()
+      const push16 = (view: DataView, position: number, value: number) => view.setUint16(position, value, true)
+      const push32 = (view: DataView, position: number, value: number) => view.setUint32(position, value >>> 0, true)
+      const concat = (parts: Uint8Array[]) => {
+        const total = parts.reduce((sum, part) => sum + part.length, 0)
+        const result = new Uint8Array(total)
+        let cursor = 0
+        for (const part of parts) { result.set(part, cursor); cursor += part.length }
+        return result
+      }
+
+      for (const file of pngFiles) {
+        const name = encoder.encode(file.name)
+        const crc = crc32(file.bytes)
+        const local = new Uint8Array(30 + name.length)
+        const localView = new DataView(local.buffer)
+        push32(localView, 0, 0x04034b50); push16(localView, 4, 20); push16(localView, 6, 0x0800)
+        push16(localView, 8, 0); push16(localView, 10, dosTime); push16(localView, 12, dosDate)
+        push32(localView, 14, crc); push32(localView, 18, file.bytes.length); push32(localView, 22, file.bytes.length)
+        push16(localView, 26, name.length); push16(localView, 28, 0); local.set(name, 30)
+        zipParts.push(local, file.bytes)
+
+        const central = new Uint8Array(46 + name.length)
+        const centralView = new DataView(central.buffer)
+        push32(centralView, 0, 0x02014b50); push16(centralView, 4, 20); push16(centralView, 6, 20)
+        push16(centralView, 8, 0x0800); push16(centralView, 10, 0); push16(centralView, 12, dosTime)
+        push16(centralView, 14, dosDate); push32(centralView, 16, crc)
+        push32(centralView, 20, file.bytes.length); push32(centralView, 24, file.bytes.length)
+        push16(centralView, 28, name.length); push16(centralView, 30, 0); push16(centralView, 32, 0)
+        push16(centralView, 34, 0); push16(centralView, 36, 0); push32(centralView, 38, 0)
+        push32(centralView, 42, offset); central.set(name, 46)
+        centralParts.push(central)
+        offset += local.length + file.bytes.length
+      }
+
+      const centralDirectory = concat(centralParts)
+      const end = new Uint8Array(22)
+      const endView = new DataView(end.buffer)
+      push32(endView, 0, 0x06054b50); push16(endView, 4, 0); push16(endView, 6, 0)
+      push16(endView, 8, pngFiles.length); push16(endView, 10, pngFiles.length)
+      push32(endView, 12, centralDirectory.length); push32(endView, 16, offset); push16(endView, 20, 0)
+
+      const zip = new Blob([...zipParts, centralDirectory, end], { type: 'application/zip' })
+      const downloadUrl = URL.createObjectURL(zip)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = 'WNR-' + submission.id.slice(0, 8) + '-PNG-report.zip'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000)
     } catch (exportError) {
       console.error(exportError)
-      setError(exportError instanceof Error ? exportError.message : 'Не удалось сформировать изображение')
+      setError(exportError instanceof Error ? exportError.message : 'Не удалось сформировать PNG-отчёт')
     } finally {
       setExportingSubmission(null)
     }
@@ -278,9 +456,9 @@ export default function Admin() {
     <section className="admin-grid">
       <div className="admin-panel admin-list-panel"><div className="admin-panel-head"><div><h2>Прохождения</h2><p>Последние отправки и текущие сессии</p></div><span>{filtered.length}</span></div>
         <div className="admin-filters"><input placeholder="Найти по ID…" value={search} onChange={e=>setSearch(e.target.value)}/><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Все статусы</option><option value="completed">Завершённые</option><option value="in_progress">В процессе</option><option value="abandoned">Прерванные</option></select></div>
-        <div className="admin-submissions">{filtered.map(s=><div key={s.id} className="submission-row"><button className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button><button className="submission-download" onClick={()=>void exportSubmissionImages(s)} title="Скачать визуальный отчёт PNG" aria-label="Скачать визуальный отчёт PNG" disabled={!answers.some(a=>a.submission_id===s.id) || exportingSubmission===s.id}>{exportingSubmission===s.id?'…':'↓'}</button></div>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
+        <div className="admin-submissions">{filtered.map(s=><div key={s.id} className="submission-row"><button className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button><button className="submission-download" onClick={()=>void exportSubmissionImages(s)} title="Скачать PNG-страницы в ZIP" aria-label="Скачать PNG-страницы в ZIP" disabled={!answers.some(a=>a.submission_id===s.id) || exportingSubmission===s.id}>{exportingSubmission===s.id?'…':'↓'}</button></div>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
       </div>
-      <div className="admin-panel admin-detail-panel"><div className="admin-panel-head"><div><h2>{selectedSubmission ? 'Ответы анкеты' : 'Детали прохождения'}</h2><p>{selectedSubmission ? selectedSubmission.id : 'Выбери прохождение слева'}</p></div>{selectedSubmission && <button className="detail-export" onClick={()=>void exportSubmissionImages(selectedSubmission)} disabled={!selectedAnswers.length || exportingSubmission===selectedSubmission.id}>{exportingSubmission===selectedSubmission.id?'Готовим изображения…':'Скачать отчёт PNG ↓'}</button>}</div>
+      <div className="admin-panel admin-detail-panel"><div className="admin-panel-head"><div><h2>{selectedSubmission ? 'Ответы анкеты' : 'Детали прохождения'}</h2><p>{selectedSubmission ? selectedSubmission.id : 'Выбери прохождение слева'}</p></div>{selectedSubmission && <button className="detail-export" onClick={()=>void exportSubmissionImages(selectedSubmission)} disabled={!selectedAnswers.length || exportingSubmission===selectedSubmission.id}>{exportingSubmission===selectedSubmission.id?'Готовим PNG-страницы…':'Скачать PNG-отчёт (ZIP) ↓'}</button>}</div>
         {selectedSubmission ? <><div className="detail-meta"><span>{selectedSubmission.status}</span><span>Начата: {dateLabel(selectedSubmission.started_at || selectedSubmission.created_at)}</span><span>Завершена: {dateLabel(selectedSubmission.completed_at)}</span></div><div className="admin-answers">{selectedAnswers.map(a=>{const q=questionById.get(a.question_id);return <article key={a.question_id}><small>{sectionById.get(q?.section_id ?? '') ?? 'ВОПРОС'} · {q?.slug ?? ''}</small><h3>{q?.prompt ?? 'Вопрос удалён'}</h3><p>{answerLabel(a.answer)}</p></article>})}{!selectedAnswers.length && <p className="admin-empty">Ответов пока нет</p>}</div></> : <div className="admin-placeholder">Выбери анкету, чтобы посмотреть её ответы и статус.</div>}
       </div>
     </section>
