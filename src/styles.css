@@ -423,3 +423,9 @@ footer{padding-bottom:4px}
   .submission-download{width:30px;height:30px}
   .detail-export{font-size:11px;padding:7px 9px}
 }
+
+
+/* WNR 2.0 multi-select limits */
+.option.disabled{opacity:.48;cursor:not-allowed}
+.option.disabled input{cursor:not-allowed}
+.selection-limit{margin:8px 2px 0;font-size:12px}
