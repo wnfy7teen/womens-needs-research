@@ -11,7 +11,7 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   'сша':'USD','соединенные штаты':'USD','соединённые штаты':'USD','united states':'USD','united states of america':'USD','usa':'USD',
   'великобритания':'GBP','соединенное королевство':'GBP','соединённое королевство':'GBP','united kingdom':'GBP','great britain':'GBP','uk':'GBP',
   'швейцария':'CHF','switzerland':'CHF','польша':'PLN','poland':'PLN','украина':'UAH','україна':'UAH','ukraine':'UAH',
-  'казахстан':'KZT','kazakhstan':'KZT','турция':'TRY','турция':'TRY','turkiye':'TRY','türkiye':'TRY','turkey':'TRY',
+  'казахстан':'KZT','kazakhstan':'KZT','турция':'TRY','turkiye':'TRY','türkiye':'TRY','turkey':'TRY',
   'китай':'CNY','china':'CNY','канада':'CAD','canada':'CAD','австралия':'AUD','australia':'AUD',
   'беларусь':'BYN','белоруссия':'BYN','belarus':'BYN','грузия':'GEL','georgia':'GEL','армения':'AMD','armenia':'AMD',
   'япония':'JPY','japan':'JPY','чехия':'CZK','чешская республика':'CZK','czechia':'CZK','czech republic':'CZK',
