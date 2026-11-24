@@ -7,7 +7,8 @@ const supabase = createClient(
   { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
 )
 
-type Submission = { id: string; status: string; locale: string; created_at: string; started_at: string; completed_at: string | null }
+type Submission = { id: string; status: string; locale: string; version_id: string; created_at: string; started_at: string; completed_at: string | null }
+type SurveyVersion = { id: string; slug: string; title: string }
 type Question = { id: string; prompt: string; slug: string; section_id: string; position: number }
 type Answer = { submission_id: string; question_id: string; answer: unknown; created_at: string }
 type Section = { id: string; title: string; position: number }
@@ -33,6 +34,7 @@ export default function Admin() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [questions, setQuestions] = useState<Question[]>([])
   const [sections, setSections] = useState<Section[]>([])
+  const [versions, setVersions] = useState<SurveyVersion[]>([])
   const [answers, setAnswers] = useState<Answer[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
@@ -62,17 +64,19 @@ export default function Admin() {
   const load = useCallback(async () => {
     if (!isAdmin) return
     setError('')
-    const [s, q, sec, a] = await Promise.all([
-      supabase.from('survey_submissions').select('id,status,locale,created_at,started_at,completed_at').order('created_at', { ascending: false }).limit(500),
+    const [s, q, sec, a, v] = await Promise.all([
+      supabase.from('survey_submissions').select('id,status,locale,version_id,created_at,started_at,completed_at').order('created_at', { ascending: false }).limit(500),
       supabase.from('survey_questions').select('id,prompt,slug,section_id,position').order('position'),
       supabase.from('survey_sections').select('id,title,position').order('position'),
-      supabase.from('survey_answers').select('submission_id,question_id,answer,created_at').order('created_at', { ascending: false }).limit(10000)
+      supabase.from('survey_answers').select('submission_id,question_id,answer,created_at').order('created_at', { ascending: false }).limit(10000),
+      supabase.from('survey_versions').select('id,slug,title')
     ])
-    const failed = [s.error, q.error, sec.error, a.error].find(Boolean)
+    const failed = [s.error, q.error, sec.error, a.error, v.error].find(Boolean)
     if (failed) { setError(failed.message); return }
     setSubmissions(s.data ?? [])
     setQuestions(q.data ?? [])
     setSections(sec.data ?? [])
+    setVersions(v.data ?? [])
     setAnswers(a.data ?? [])
     setUpdatedAt(new Date())
   }, [isAdmin])
@@ -98,6 +102,7 @@ export default function Admin() {
 
   const questionById = useMemo(() => new Map(questions.map(q => [q.id, q])), [questions])
   const sectionById = useMemo(() => new Map(sections.map(s => [s.id, s.title])), [sections])
+  const versionById = useMemo(() => new Map(versions.map(v => [v.id, v.slug.toLocaleUpperCase('ru').replace(/_/g,' ')])), [versions])
   const filtered = submissions.filter(s => (filter === 'all' || s.status === filter) &&
     (s.id.toLowerCase().includes(search.toLowerCase()) || s.locale.toLowerCase().includes(search.toLowerCase())))
   const selectedSubmission = submissions.find(s => s.id === selected)
@@ -134,8 +139,8 @@ export default function Admin() {
     setPassword('')
   }
   function exportCsv() {
-    const rows = [['submission_id','status','question','answer','created_at'], ...answers.map(a => [
-      a.submission_id, submissions.find(s => s.id === a.submission_id)?.status ?? '',
+    const rows = [['submission_id','version','status','question','answer','created_at'], ...answers.map(a => [
+      a.submission_id, versionById.get(submissions.find(s => s.id === a.submission_id)?.version_id ?? '') ?? '', submissions.find(s => s.id === a.submission_id)?.status ?? '',
       questionById.get(a.question_id)?.prompt ?? a.question_id, answerLabel(a.answer), a.created_at
     ])]
     const csv = rows.map(row => row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')
@@ -456,13 +461,13 @@ export default function Admin() {
     <section className="admin-grid">
       <div className="admin-panel admin-list-panel"><div className="admin-panel-head"><div><h2>Прохождения</h2><p>Последние отправки и текущие сессии</p></div><span>{filtered.length}</span></div>
         <div className="admin-filters"><input placeholder="Найти по ID…" value={search} onChange={e=>setSearch(e.target.value)}/><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Все статусы</option><option value="completed">Завершённые</option><option value="in_progress">В процессе</option><option value="abandoned">Прерванные</option></select></div>
-        <div className="admin-submissions">{filtered.map(s=><div key={s.id} className="submission-row"><button className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button><button className="submission-download" onClick={()=>void exportSubmissionImages(s)} title="Скачать PNG-страницы в ZIP" aria-label="Скачать PNG-страницы в ZIP" disabled={!answers.some(a=>a.submission_id===s.id) || exportingSubmission===s.id}>{exportingSubmission===s.id?'…':'↓'}</button></div>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
+        <div className="admin-submissions">{filtered.map(s=><div key={s.id} className="submission-row"><button className={'admin-submission '+(selected===s.id?'chosen':'')} onClick={()=>setSelected(s.id)}><span className={'status-dot '+s.status}/><span className="submission-main"><b>{s.id.slice(0,8)}…</b><small>{dateLabel(s.created_at)} · {versionById.get(s.version_id) ?? 'WNR'}</small></span><span className="submission-status">{s.status==='completed'?'Завершена':s.status==='in_progress'?'В процессе':'Прервана'}</span><span className="submission-count">{answers.filter(a=>a.submission_id===s.id).length} отв.</span></button><button className="submission-download" onClick={()=>void exportSubmissionImages(s)} title="Скачать PNG-страницы в ZIP" aria-label="Скачать PNG-страницы в ZIP" disabled={!answers.some(a=>a.submission_id===s.id) || exportingSubmission===s.id}>{exportingSubmission===s.id?'…':'↓'}</button></div>)}{!filtered.length && <p className="admin-empty">Ничего не найдено</p>}</div>
       </div>
       <div className="admin-panel admin-detail-panel"><div className="admin-panel-head"><div><h2>{selectedSubmission ? 'Ответы анкеты' : 'Детали прохождения'}</h2><p>{selectedSubmission ? selectedSubmission.id : 'Выбери прохождение слева'}</p></div>{selectedSubmission && <button className="detail-export" onClick={()=>void exportSubmissionImages(selectedSubmission)} disabled={!selectedAnswers.length || exportingSubmission===selectedSubmission.id}>{exportingSubmission===selectedSubmission.id?'Готовим PNG-страницы…':'Скачать PNG-отчёт (ZIP) ↓'}</button>}</div>
-        {selectedSubmission ? <><div className="detail-meta"><span>{selectedSubmission.status}</span><span>Начата: {dateLabel(selectedSubmission.started_at || selectedSubmission.created_at)}</span><span>Завершена: {dateLabel(selectedSubmission.completed_at)}</span></div><div className="admin-answers">{selectedAnswers.map(a=>{const q=questionById.get(a.question_id);return <article key={a.question_id}><small>{sectionById.get(q?.section_id ?? '') ?? 'ВОПРОС'} · {q?.slug ?? ''}</small><h3>{q?.prompt ?? 'Вопрос удалён'}</h3><p>{answerLabel(a.answer)}</p></article>})}{!selectedAnswers.length && <p className="admin-empty">Ответов пока нет</p>}</div></> : <div className="admin-placeholder">Выбери анкету, чтобы посмотреть её ответы и статус.</div>}
+        {selectedSubmission ? <><div className="detail-meta"><span>{selectedSubmission.status}</span><span>{versionById.get(selectedSubmission.version_id) ?? 'WNR'}</span><span>Начата: {dateLabel(selectedSubmission.started_at || selectedSubmission.created_at)}</span><span>Завершена: {dateLabel(selectedSubmission.completed_at)}</span></div><div className="admin-answers">{selectedAnswers.map(a=>{const q=questionById.get(a.question_id);return <article key={a.question_id}><small>{sectionById.get(q?.section_id ?? '') ?? 'ВОПРОС'} · {q?.slug ?? ''}</small><h3>{q?.prompt ?? 'Вопрос удалён'}</h3><p>{answerLabel(a.answer)}</p></article>})}{!selectedAnswers.length && <p className="admin-empty">Ответов пока нет</p>}</div></> : <div className="admin-placeholder">Выбери анкету, чтобы посмотреть её ответы и статус.</div>}
       </div>
     </section>
-    <section className="admin-analytics"><div className="admin-panel-head"><div><h2>Быстрые срезы</h2><p>Частота выбранных вариантов по сохранённым ответам</p></div></div><div className="analytics-grid">{[['age','Возраст'],['country','Страна'],['difficulty_frequency','Частота трудностей'],['price_range','Приемлемая цена']].map(([slug,title])=><article className="admin-panel analytics-card" key={slug}><h3>{title}</h3>{distribution(slug).map(([label,count])=><div className="bar-row" key={label}><span>{label}</span><div><i style={{width: (count/Math.max(1,...distribution(slug).map(x=>x[1]))*100)+'%'}}/></div><b>{count}</b></div>)}{!distribution(slug).length && <p className="admin-empty">Пока недостаточно данных</p>}</article>)}</div></section>
+    <section className="admin-analytics"><div className="admin-panel-head"><div><h2>Быстрые срезы</h2><p>Частота выбранных вариантов по сохранённым ответам</p></div></div><div className="analytics-grid">{[['v2_age','Возраст'],['v2_country','Страна'],['v2_problem_frequency','Частота трудностей'],['v2_price_range','Приемлемая цена']].map(([slug,title])=><article className="admin-panel analytics-card" key={slug}><h3>{title}</h3>{distribution(slug).map(([label,count])=><div className="bar-row" key={label}><span>{label}</span><div><i style={{width: (count/Math.max(1,...distribution(slug).map(x=>x[1]))*100)+'%'}}/></div><b>{count}</b></div>)}{!distribution(slug).length && <p className="admin-empty">Пока недостаточно данных</p>}</article>)}</div></section>
     <footer className="admin-footer">WNR · PRIVATE ADMIN AREA <span>Realtime subscription active</span></footer>
   </main>
 }
