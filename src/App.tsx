@@ -9,7 +9,7 @@ type Question = {
   config: Record<string, unknown>; options: Option[]
 }
 type Section = { id: string; slug: string; title: string; description?: string; position: number }
-type Survey = { sections: Section[]; questions: Question[]; consentVersion: string }
+type Survey = { sections: Section[]; questions: Question[]; consentVersion: string; intro?: string }
 type Answer = string | string[] | number
 
 type SavedSession = {
@@ -229,11 +229,11 @@ function App() {
   if (!survey) return <main className="shell centered"><div className="brand-mark">W</div><h1>Не удалось загрузить опрос</h1><p className="muted">{error || 'Проверьте подключение и попробуйте снова.'}</p><button onClick={()=>location.reload()}>Повторить</button></main>
 
   return <main className="shell">
-    <header className="topbar"><div className="brand"><div className="brand-mark">W</div><span>WOMEN'S NEEDS RESEARCH</span></div><span className="privacy">Анонимно · 5–8 минут</span></header>
+    <header className="topbar"><div className="brand"><div className="brand-mark">W</div><span>WOMEN'S NEEDS RESEARCH</span></div><span className="privacy">Анонимно · 5–7 минут</span></header>
     {screen === 'intro' && <section className="intro panel">
       <div className="eyebrow">АНОНИМНОЕ ИССЛЕДОВАНИЕ</div>
-      <h1>Что действительно<br/><em>важно для вас?</em></h1>
-      <p className="lead">Помоги нам лучше понять, с какими трудностями женщины сталкиваются в повседневной жизни, чего им не хватает и что действительно могло бы сделать их жизнь комфортнее. Здесь нет правильных или неправильных ответов — нам важно твоё личное мнение.</p>
+      <h1>Что действительно<br/><em>важно именно тебе?</em></h1>
+      <p className="lead">{survey.intro || 'Помоги нам лучше понять, с какими трудностями женщины сталкиваются в повседневной жизни, чего им не хватает и что действительно могло бы сделать их жизнь комфортнее. Нас интересует твоё личное мнение — здесь нет правильных или неправильных ответов. Расскажи о том, что важно именно тебе. Опрос анонимный и займёт ориентировочно 5–7 минут.'}</p>
       <div className="facts"><div><strong>{totalQuestions}</strong><span>вопросов</span></div><div><strong>{sections.length}</strong><span>разделов</span></div><div><strong>{estimatedDuration}</strong><span>минут</span></div></div>
       <div className="consent"><input id="consent" type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><label htmlFor="consent">Я добровольно соглашаюсь принять участие в анонимном исследовании. Понимаю, что могу прекратить участие в любой момент. Не буду указывать ФИО, контакты и другие персональные данные в открытых ответах.</label></div>
       <button className="primary wide" disabled={!consent || busy} onClick={start}>{busy?'Подготавливаем…':'Начать исследование'} <span>→</span></button>
