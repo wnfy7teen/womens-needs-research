@@ -91,8 +91,8 @@ export function formatLocalAmount(eurAmount: number, currency: CurrencyInfo): st
 export function localPriceLabel(value: string, currency: CurrencyInfo): string {
   if (value === 'up_to_5' || value === 'до_5') return 'До ' + formatLocalAmount(5,currency)
   if (value === '5_10') return formatLocalAmount(5,currency) + ' – ' + formatLocalAmount(10,currency)
-  if (value === '11_20') return formatLocalAmount(10,currency) + ' – ' + formatLocalAmount(20,currency)
-  if (value === '21_40') return formatLocalAmount(20,currency) + ' – ' + formatLocalAmount(40,currency)
+  if (value === '11_20') return formatLocalAmount(11,currency) + ' – ' + formatLocalAmount(20,currency)
+  if (value === '21_40') return formatLocalAmount(21,currency) + ' – ' + formatLocalAmount(40,currency)
   if (value === 'over_40' || value === 'более_40') return 'Более ' + formatLocalAmount(40,currency)
   return value
 }
