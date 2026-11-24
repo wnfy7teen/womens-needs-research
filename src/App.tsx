@@ -135,6 +135,7 @@ function App() {
   )
   const currentQuestion = sectionQuestions[questionIndex]
   const totalQuestions = survey?.questions.length ?? 18
+  const estimatedDuration = totalQuestions <= 20 ? '5–7' : '5–8'
   const answeredCount = survey?.questions.filter(q => {
     const a = answers[q.id]
     return Array.isArray(a) ? a.length > 0 : a !== undefined && String(a).trim() !== ''
@@ -233,7 +234,7 @@ function App() {
       <div className="eyebrow">АНОНИМНОЕ ИССЛЕДОВАНИЕ</div>
       <h1>Что действительно<br/><em>важно для вас?</em></h1>
       <p className="lead">Помоги нам лучше понять, с какими трудностями женщины сталкиваются в повседневной жизни, чего им не хватает и что действительно могло бы сделать их жизнь комфортнее. Здесь нет правильных или неправильных ответов — нам важно твоё личное мнение.</p>
-      <div className="facts"><div><strong>18</strong><span>вопросов</span></div><div><strong>5</strong><span>разделов</span></div><div><strong>5–7</strong><span>минут</span></div></div>
+      <div className="facts"><div><strong>{totalQuestions}</strong><span>вопросов</span></div><div><strong>{sections.length}</strong><span>разделов</span></div><div><strong>{estimatedDuration}</strong><span>минут</span></div></div>
       <div className="consent"><input id="consent" type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><label htmlFor="consent">Я добровольно соглашаюсь принять участие в анонимном исследовании. Понимаю, что могу прекратить участие в любой момент. Не буду указывать ФИО, контакты и другие персональные данные в открытых ответах.</label></div>
       <button className="primary wide" disabled={!consent || busy} onClick={start}>{busy?'Подготавливаем…':'Начать исследование'} <span>→</span></button>
       {error && <p className="error">{error}</p>}
