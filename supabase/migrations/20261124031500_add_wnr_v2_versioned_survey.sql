@@ -21,6 +21,10 @@ create table public.survey_versions (
 alter table public.survey_versions enable row level security;
 revoke all on public.survey_versions from public, anon, authenticated;
 grant all on public.survey_versions to service_role;
+grant select on public.survey_versions to authenticated;
+create policy wnr_admin_read_survey_versions on public.survey_versions
+  for select to authenticated
+  using (exists (select 1 from public.admin_users au where au.user_id = (select auth.uid())));
 
 insert into public.survey_versions (slug,title,intro,is_active)
 values
