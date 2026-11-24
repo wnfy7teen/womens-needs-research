@@ -697,3 +697,38 @@ footer{
 
 /* WNR survey typography */
 .shell{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+
+
+@media(min-width:900px){
+  .survey{
+    display:grid;
+    grid-template-columns:minmax(190px,.72fr) minmax(0,1.65fr);
+    column-gap:clamp(28px,4vw,58px);
+    row-gap:0;
+    max-width:1000px;
+    align-items:start;
+  }
+  .survey>.progress-head,
+  .survey>.progress-track{grid-column:1/-1}
+  .survey>.section-meta{
+    grid-column:1;
+    grid-row:3;
+    position:sticky;
+    top:28px;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:12px;
+    margin:10px 0 0;
+    padding:22px 20px;
+    border:1px solid var(--wnr-line);
+    border-radius:18px;
+    background:rgba(255,254,250,.78);
+  }
+  .survey>.section-meta>div{max-width:220px}
+  .survey>.section-meta p{line-height:1.65}
+  .survey>.question-card{grid-column:2;grid-row:3}
+  .survey>.error{grid-column:2}
+  .survey>.nav-actions{grid-column:2}
+  .survey>.save-note{grid-column:2}
+}
