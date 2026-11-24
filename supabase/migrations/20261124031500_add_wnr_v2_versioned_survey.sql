@@ -106,10 +106,6 @@ with question_seed as (
   returning id, slug
 )
 insert into public.survey_options (question_id,value,label,position,is_active)
-select iq.id, opt.value, opt.label, opt.ordinality::integer, false
-from inserted_questions iq
-join question_seed q on q.slug=iq.slug
-cross join lateral jsonb_array_elements(q.options) with ordinality as e(item, ordinality)
 select iq.id, e.item->>0, e.item->>1, e.ordinality::integer, false
 from inserted_questions iq
 join question_seed q on q.slug=iq.slug
