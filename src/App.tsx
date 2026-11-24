@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './styles.css'
-import { formatLocalAmount, loadEuroRates, localPriceLabel, resolveCurrency } from './currency'
+import { loadEuroRates, localPriceLabel, resolveCurrency } from './currency'
 
 type Option = { id: string; value: string; label: string; position: number }
 type Question = {
