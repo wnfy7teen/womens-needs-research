@@ -64,7 +64,7 @@ export default function Admin() {
   const load = useCallback(async () => {
     if (!isAdmin) return
     setError('')
-    const [s, q, sec, a] = await Promise.all([
+    const [s, q, sec, a, v] = await Promise.all([
       supabase.from('survey_submissions').select('id,status,locale,version_id,created_at,started_at,completed_at').order('created_at', { ascending: false }).limit(500),
       supabase.from('survey_questions').select('id,prompt,slug,section_id,position').order('position'),
       supabase.from('survey_sections').select('id,title,position').order('position'),
@@ -102,7 +102,7 @@ export default function Admin() {
 
   const questionById = useMemo(() => new Map(questions.map(q => [q.id, q])), [questions])
   const sectionById = useMemo(() => new Map(sections.map(s => [s.id, s.title])), [sections])
-  const versionById = useMemo(() => new Map(versions.map(v => [v.id, v.slug.toLocaleUpperCase('ru').replace('_',' ')])), [versions])
+  const versionById = useMemo(() => new Map(versions.map(v => [v.id, v.slug.toLocaleUpperCase('ru').replace(/_/g,' ')])), [versions])
   const filtered = submissions.filter(s => (filter === 'all' || s.status === filter) &&
     (s.id.toLowerCase().includes(search.toLowerCase()) || s.locale.toLowerCase().includes(search.toLowerCase())))
   const selectedSubmission = submissions.find(s => s.id === selected)
