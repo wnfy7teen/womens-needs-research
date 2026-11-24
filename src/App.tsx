@@ -292,7 +292,7 @@ function AnswerInput({question, value, country, currencyRates, onChange}:{questi
   if (type === 'country') return <input className="text-input" placeholder="Например, Нидерланды" value={typeof value==='string'?value:''} onChange={e=>onChange(e.target.value)}/>
   const currency = resolveCurrency(country,currencyRates)
   const isPriceQuestion = question.slug === 'v2_price_range' || question.slug === 'price_range'
-  return <div className="options">{question.options.map(o=><label className={`option ${value===o.value?'active':''}`} key={o.id}><input type="radio" name={question.id} checked={value===o.value} onChange={()=>onChange(o.value)}/><span>{isPriceQuestion ? localPriceLabel(o.value,currency) : o.label.replace(/_/g, ' ')}</span><i>{value===o.value?'✓':''}</i></label>)}{isPriceQuestion && currency.isFallback && <p className="muted">Для указанной страны не удалось определить валюту — суммы показаны в евро.</p>}</div>
+  return <div className="options">{question.options.map(o=><label className={`option ${value===o.value?'active':''}`} key={o.id}><input type="radio" name={question.id} checked={value===o.value} onChange={()=>onChange(o.value)}/><span>{isPriceQuestion && localPriceLabel(o.value,currency)!==o.value ? localPriceLabel(o.value,currency) : o.label.replace(/_/g, ' ')}</span><i>{value===o.value?'✓':''}</i></label>)}{isPriceQuestion && currency.isFallback && <p className="muted">Для указанной страны не удалось определить валюту — суммы показаны в евро.</p>}</div>
 }
 
 export default App
