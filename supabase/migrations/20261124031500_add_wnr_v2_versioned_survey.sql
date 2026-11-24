@@ -20,6 +20,7 @@ create table public.survey_versions (
 );
 alter table public.survey_versions enable row level security;
 revoke all on public.survey_versions from public, anon, authenticated;
+grant all on public.survey_versions to service_role;
 
 insert into public.survey_versions (slug,title,intro,is_active)
 values
@@ -109,7 +110,10 @@ select iq.id, opt.value, opt.label, opt.ordinality::integer, false
 from inserted_questions iq
 join question_seed q on q.slug=iq.slug
 cross join lateral jsonb_array_elements(q.options) with ordinality as e(item, ordinality)
-cross join lateral jsonb_to_record(e.item) as opt(value text,label text);
+select iq.id, e.item->>0, e.item->>1, e.ordinality::integer, false
+from inserted_questions iq
+join question_seed q on q.slug=iq.slug
+cross join lateral jsonb_array_elements(q.options) with ordinality as e(item, ordinality);
 
 -- Ensure the new version is available to the Edge Function only after the app/function rollout.
 update public.survey_versions set is_active=false where slug='wnr_2_0';
